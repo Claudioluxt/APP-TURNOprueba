@@ -1,11 +1,8 @@
 import { useState, useEffect } from "react";
-
-import { createClient } from "@supabase/supabase-js";
-
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ─────────────────────────────────────────────
 //  🔧 CONFIGURACIÓN SUPABASE
-//  Reemplazá estos valores con los de tu proyecto
 // ─────────────────────────────────────────────
 const SUPABASE_URL = 'https://cyrinitjjbdcswakbqli.supabase.co'
 const SUPABASE_ANON_KEY = "sb_publishable_FDD0GpFO814XI6DiCe9bxg_k92hHvlx";
@@ -17,21 +14,32 @@ const isConfigured =
   !SUPABASE_ANON_KEY.includes("TU_ANON_KEY");
 
 // ─────────────────────────────────────────────
+//  REGLAS DE NEGOCIO
+// ─────────────────────────────────────────────
+const MAX_TURNOS_POR_DIA = 8;
+const DIAS_LABORABLES = [1, 2, 3, 4, 5]; // 0=dom, 1=lun ... 6=sab
+const DIAS_NOMBRES = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 
 const DURATIONS = [30, 45, 60, 90, 120];
 const SERVICES = ["Masaje Relajante", "Masaje Deportivo", "Masaje Descontracturante", "Masaje con Piedras Calientes", "Reflexología"];
 
 const formatTime = (date) => date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
 const formatDate = (date) => date.toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "short" });
+const isSameDay = (a, b) => a.toDateString() === b.toDateString();
+const isToday = (date) => isSameDay(date, new Date());
+
+// Verifica si dos turnos se solapan en el tiempo
+const turnosSeSuperponen = (fechaA, durA, fechaB, durB) => {
+  const inicioA = fechaA.getTime();
+  const finA = inicioA + durA * 60000;
+  const inicioB = fechaB.getTime();
+  const finB = inicioB + durB * 60000;
+  return inicioA < finB && finA > inicioB;
+};
 
 const rowToAppt = (row) => ({
-  id: row.id,
-  name: row.name,
-  email: row.email,
-  phone: row.phone,
-  service: row.service,
-  duration: row.duration,
-  status: row.status,
+  id: row.id, name: row.name, email: row.email, phone: row.phone,
+  service: row.service, duration: row.duration, status: row.status,
   date: new Date(row.date),
 });
 
@@ -46,6 +54,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState(null);
   const [view, setView] = useState("list");
+  const [filterHoy, setFilterHoy] = useState(false);
   const [selected, setSelected] = useState(null);
   const [editingDuration, setEditingDuration] = useState(null);
   const [form, setForm] = useState({
@@ -56,7 +65,6 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  // ── Cargar turnos desde Supabase ──
   useEffect(() => {
     if (!isConfigured) { setLoading(false); return; }
     fetchAppointments();
@@ -64,21 +72,48 @@ export default function App() {
 
   const fetchAppointments = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("turnos")
-      .select("*")
-      .order("date", { ascending: true });
-    if (error) {
-      setDbError(error.message);
-    } else {
-      setAppointments(data.map(rowToAppt));
-    }
+    const { data, error } = await supabase.from("turnos").select("*").order("date", { ascending: true });
+    if (error) setDbError(error.message);
+    else setAppointments(data.map(rowToAppt));
     setLoading(false);
   };
 
   const showSuccess = (msg) => {
     setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(""), 3000);
+    setTimeout(() => setSuccessMsg(""), 3500);
+  };
+
+  // ── Validaciones de negocio ──
+  const validateBusiness = (dateObj, durationMin, excludeId = null) => {
+    const diaSemana = dateObj.getDay();
+
+    // 1. Día laborable
+    if (!DIAS_LABORABLES.includes(diaSemana)) {
+      return `No se trabaja los ${DIAS_NOMBRES[diaSemana]}. Solo se aceptan turnos de lunes a viernes.`;
+    }
+
+    // 2. Límite de turnos por día (solo turnos activos, no cancelados)
+    const turnosDelDia = appointments.filter(a =>
+      isSameDay(a.date, dateObj) &&
+      a.status !== "cancelado" &&
+      a.id !== excludeId
+    );
+    if (turnosDelDia.length >= MAX_TURNOS_POR_DIA) {
+      return `El día ${formatDate(dateObj)} ya tiene ${MAX_TURNOS_POR_DIA} turnos agendados (máximo permitido).`;
+    }
+
+    // 3. Superposición horaria
+    const conflicto = appointments.find(a =>
+      a.id !== excludeId &&
+      a.status !== "cancelado" &&
+      isSameDay(a.date, dateObj) &&
+      turnosSeSuperponen(dateObj, durationMin, a.date, a.duration)
+    );
+    if (conflicto) {
+      return `Conflicto de horario con el turno de ${conflicto.name} a las ${formatTime(conflicto.date)} (${conflicto.duration} min).`;
+    }
+
+    return null;
   };
 
   const validate = () => {
@@ -88,6 +123,13 @@ export default function App() {
     if (form.phone.length < 8) e.phone = "Teléfono inválido";
     if (!form.date) e.date = "Fecha requerida";
     if (!form.time) e.time = "Hora requerida";
+
+    if (form.date && form.time) {
+      const dateObj = new Date(`${form.date}T${form.time}`);
+      const bizError = validateBusiness(dateObj, form.duration, selected?.id);
+      if (bizError) e.business = bizError;
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -126,10 +168,14 @@ export default function App() {
       date: `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`,
       time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
     });
+    setErrors({});
     setView("form");
   };
 
   const updateDuration = async (id, dur) => {
+    const appt = appointments.find(a => a.id === id);
+    const bizError = validateBusiness(appt.date, dur, id);
+    if (bizError) { setDbError(bizError); return; }
     const { error } = await supabase.from("turnos").update({ duration: dur }).eq("id", id);
     if (error) { setDbError(error.message); return; }
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, duration: dur } : a));
@@ -152,14 +198,21 @@ export default function App() {
     showSuccess("Todos los turnos fueron eliminados");
   };
 
+  // ── Turnos de hoy para el contador ──
+  const turnosHoy = appointments.filter(a => isToday(a.date) && a.status !== "cancelado");
+  const cupoHoyUsado = turnosHoy.length;
+  const cupoHoyLibre = MAX_TURNOS_POR_DIA - cupoHoyUsado;
+
   const filtered = appointments
-    .filter(a =>
-      a.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.service.toLowerCase().includes(search.toLowerCase())
-    )
+    .filter(a => {
+      const matchSearch = a.name.toLowerCase().includes(search.toLowerCase()) ||
+        a.service.toLowerCase().includes(search.toLowerCase());
+      const matchHoy = !filterHoy || isToday(a.date);
+      return matchSearch && matchHoy;
+    })
     .sort((a, b) => a.date - b.date);
 
-  // ── Pantalla de configuración pendiente ──
+  // ── Pantalla de configuración ──
   if (!isConfigured) {
     return (
       <div style={styles.root}>
@@ -167,7 +220,7 @@ export default function App() {
         <header style={styles.header}>
           <div style={styles.headerInner}>
             <div>
-              <div style={styles.logo}>✦ SERENITAS</div>
+              <div style={styles.logo}>✦Relajate o te RELAJO</div>
               <div style={styles.logoSub}>Sistema de Turnos · Sala de Masajes</div>
             </div>
           </div>
@@ -180,14 +233,12 @@ export default function App() {
               Para activar la base de datos, reemplazá las credenciales en la parte superior del archivo <code style={styles.code}>App.jsx</code>:
             </p>
             <div style={styles.setupSteps}>
-              <div style={styles.step}><span style={styles.stepNum}>1</span> Creá una cuenta en <strong>supabase.com</strong> (es gratis)</div>
-              <div style={styles.step}><span style={styles.stepNum}>2</span> Creá un nuevo proyecto</div>
-              <div style={styles.step}><span style={styles.stepNum}>3</span> Andá a <strong>SQL Editor</strong> y ejecutá el script de abajo</div>
-              <div style={styles.step}><span style={styles.stepNum}>4</span> Copiá la <strong>Project URL</strong> y la <strong>anon key</strong> desde <em>Project Settings → API</em></div>
-              <div style={styles.step}><span style={styles.stepNum}>5</span> Pegálas en las variables <code style={styles.code}>SUPABASE_URL</code> y <code style={styles.code}>SUPABASE_ANON_KEY</code></div>
+              {["Creá una cuenta en supabase.com (es gratis)", "Creá un nuevo proyecto", "Andá a SQL Editor y ejecutá el script de abajo", "Copiá la Project URL y la anon key desde Project Settings → API", "Pegálas en las variables SUPABASE_URL y SUPABASE_ANON_KEY"].map((s, i) => (
+                <div key={i} style={styles.step}><span style={styles.stepNum}>{i+1}</span> {s}</div>
+              ))}
             </div>
             <div style={styles.sqlBlock}>
-              <div style={styles.sqlTitle}>📋 Script SQL — ejecutar en Supabase SQL Editor</div>
+              <div style={styles.sqlTitle}>📋 Script SQL</div>
               <pre style={styles.sqlCode}>{`create table turnos (
   id uuid default gen_random_uuid() primary key,
   name text not null,
@@ -199,8 +250,6 @@ export default function App() {
   date timestamptz not null,
   created_at timestamptz default now()
 );
-
--- Permitir acceso público (ajustá según necesites)
 alter table turnos enable row level security;
 create policy "Allow all" on turnos for all using (true);`}</pre>
             </div>
@@ -217,7 +266,7 @@ create policy "Allow all" on turnos for all using (true);`}</pre>
       <header style={styles.header}>
         <div style={styles.headerInner}>
           <div>
-            <div style={styles.logo}>✦ SERENITAS</div>
+            <div style={styles.logo}>✦ NO LELE PANSA</div>
             <div style={styles.logoSub}>Sistema de Turnos · Sala de Masajes</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -238,28 +287,47 @@ create policy "Allow all" on turnos for all using (true);`}</pre>
       {dbError && (
         <div style={{ ...styles.toast, background: "#e53e3e" }}>
           ❌ {dbError}
-          <button onClick={() => setDbError(null)} style={{ marginLeft: 12, background: "transparent", border: "none", color: "#fff", cursor: "pointer" }}>✕</button>
+          <button onClick={() => setDbError(null)} style={{ marginLeft: 12, background: "transparent", border: "none", color: "#fff", cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
       )}
 
       <main style={styles.main}>
         {view === "list" && (
           <>
+            {/* Stats */}
             <div style={styles.statsRow}>
               {[
                 { label: "Total Turnos", value: appointments.length, icon: "📋" },
                 { label: "Confirmados", value: appointments.filter(a=>a.status==="confirmado").length, icon: "✅" },
-                { label: "Pendientes",  value: appointments.filter(a=>a.status==="pendiente").length,  icon: "⏳" },
-                { label: "Hoy", value: appointments.filter(a=>{const t=new Date();return a.date.toDateString()===t.toDateString()}).length, icon: "📅" },
+                { label: "Pendientes",  value: appointments.filter(a=>a.status==="pendiente").length, icon: "⏳" },
+                { label: "Turnos Hoy",  value: cupoHoyUsado, icon: "📅", sub: `${cupoHoyLibre} lugar${cupoHoyLibre !== 1 ? "es" : ""} libre${cupoHoyLibre !== 1 ? "s" : ""}`, subColor: cupoHoyLibre === 0 ? "#e53e3e" : cupoHoyLibre <= 2 ? "#f0a500" : "#27ae60" },
               ].map(s => (
-                <div key={s.label} style={styles.statCard}>
+                <div key={s.label} style={{ ...styles.statCard, cursor: s.label === "Turnos Hoy" ? "pointer" : "default", outline: s.label === "Turnos Hoy" && filterHoy ? "2px solid #c8873a" : "none" }}
+                  onClick={() => s.label === "Turnos Hoy" && setFilterHoy(f => !f)}>
                   <div style={styles.statIcon}>{s.icon}</div>
                   <div style={styles.statValue}>{s.value}</div>
                   <div style={styles.statLabel}>{s.label}</div>
+                  {s.sub && <div style={{ fontSize: 10, color: s.subColor, fontWeight: 700, marginTop: 2 }}>{s.sub}</div>}
                 </div>
               ))}
             </div>
 
+            {/* Alerta cupo lleno hoy */}
+            {cupoHoyLibre === 0 && (
+              <div style={styles.alertaBanner}>
+                ⚠️ <strong>Agenda completa para hoy</strong> — Se alcanzó el límite de {MAX_TURNOS_POR_DIA} turnos diarios.
+              </div>
+            )}
+
+            {/* Filtro hoy activo */}
+            {filterHoy && (
+              <div style={styles.filterBanner}>
+                📅 Mostrando solo turnos de hoy
+                <button style={styles.filterClear} onClick={() => setFilterHoy(false)}>✕ Ver todos</button>
+              </div>
+            )}
+
+            {/* Buscador */}
             <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
               <div style={{ ...styles.searchWrap, marginBottom: 0, flex: 1 }}>
                 <span style={styles.searchIcon}>🔍</span>
@@ -271,6 +339,7 @@ create policy "Allow all" on turnos for all using (true);`}</pre>
               )}
             </div>
 
+            {/* Lista */}
             <div style={styles.list}>
               {loading && (
                 <div style={styles.empty}>
@@ -281,15 +350,19 @@ create policy "Allow all" on turnos for all using (true);`}</pre>
               {!loading && filtered.length === 0 && (
                 <div style={styles.empty}>
                   <div style={{ fontSize: 48, marginBottom: 12 }}>🌿</div>
-                  <div style={{ fontFamily: "Georgia, serif", fontSize: 18, color: "#7a6e5f" }}>No hay turnos registrados</div>
+                  <div style={{ fontFamily: "Georgia, serif", fontSize: 18, color: "#7a6e5f" }}>
+                    {filterHoy ? "No hay turnos para hoy" : "No hay turnos registrados"}
+                  </div>
                 </div>
               )}
               {!loading && filtered.map(appt => {
                 const sc = statusColors[appt.status] || statusColors.pendiente;
+                const esHoy = isToday(appt.date);
                 return (
-                  <div key={appt.id} style={styles.card}>
+                  <div key={appt.id} style={{ ...styles.card, ...(esHoy ? styles.cardHoy : {}) }}>
                     <div style={styles.cardLeft}>
-                      <div style={styles.cardDate}>
+                      <div style={{ ...styles.cardDate, ...(esHoy ? styles.cardDateHoy : {}) }}>
+                        {esHoy && <div style={styles.cardHoyTag}>HOY</div>}
                         <div style={styles.cardDateDay}>{formatDate(appt.date)}</div>
                         <div style={styles.cardDateTime}>{formatTime(appt.date)}</div>
                       </div>
@@ -342,6 +415,14 @@ create policy "Allow all" on turnos for all using (true);`}</pre>
                 <button style={styles.backBtn} onClick={() => setView("list")}>← Volver</button>
                 <h2 style={styles.formTitle}>{selected ? "Editar Turno" : "Nuevo Turno"}</h2>
               </div>
+
+              {/* Alerta de error de negocio */}
+              {errors.business && (
+                <div style={styles.bizError}>
+                  ⚠️ {errors.business}
+                </div>
+              )}
+
               <div style={styles.formGrid}>
                 <div style={styles.field}>
                   <label style={styles.label}>Nombre del Cliente *</label>
@@ -376,6 +457,12 @@ create policy "Allow all" on turnos for all using (true);`}</pre>
                   <input type="date" style={{ ...styles.input, ...(errors.date ? styles.inputError : {}) }}
                     value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
                   {errors.date && <span style={styles.errorMsg}>{errors.date}</span>}
+                  {/* Aviso fin de semana en tiempo real */}
+                  {form.date && !DIAS_LABORABLES.includes(new Date(form.date + "T12:00").getDay()) && (
+                    <span style={{ ...styles.errorMsg, color: "#e07a00" }}>
+                      ⚠️ Este día es fin de semana — no se trabaja
+                    </span>
+                  )}
                 </div>
                 <div style={styles.field}>
                   <label style={styles.label}>Hora *</label>
@@ -434,11 +521,14 @@ const styles = {
   newBtn: { background: "linear-gradient(135deg, #c8873a, #a0622a)", color: "#fff9f0", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 14, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontWeight: 600, letterSpacing: "0.05em", boxShadow: "0 2px 12px rgba(168,90,36,0.35)" },
   toast: { position: "fixed", top: 80, left: "50%", transform: "translateX(-50%)", background: "#27ae60", color: "#fff", borderRadius: 8, padding: "12px 28px", fontSize: 14, fontFamily: "inherit", zIndex: 100, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", letterSpacing: "0.03em", display: "flex", alignItems: "center", gap: 8 },
   main: { maxWidth: 900, margin: "0 auto", padding: "28px 20px 60px", position: "relative", zIndex: 1 },
-  statsRow: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 },
-  statCard: { background: "rgba(255,252,245,0.85)", borderRadius: 14, padding: "18px 14px", textAlign: "center", boxShadow: "0 2px 12px rgba(100,70,40,0.1)", border: "1px solid rgba(168,130,90,0.15)" },
+  statsRow: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 18 },
+  statCard: { background: "rgba(255,252,245,0.85)", borderRadius: 14, padding: "18px 14px", textAlign: "center", boxShadow: "0 2px 12px rgba(100,70,40,0.1)", border: "1px solid rgba(168,130,90,0.15)", transition: "transform 0.15s" },
   statIcon: { fontSize: 22, marginBottom: 6 },
   statValue: { fontSize: 28, fontWeight: 700, color: "#3d2b1f", lineHeight: 1 },
   statLabel: { fontSize: 11, color: "#9a8060", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4 },
+  alertaBanner: { background: "#fde8e8", border: "1.5px solid #e53e3e", borderRadius: 10, padding: "12px 18px", fontSize: 14, color: "#7a1a1a", marginBottom: 14 },
+  filterBanner: { background: "#fef5dc", border: "1.5px solid #f0a500", borderRadius: 10, padding: "10px 18px", fontSize: 13, color: "#7a5a0a", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" },
+  filterClear: { background: "transparent", border: "none", color: "#7a5a0a", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 13 },
   searchWrap: { display: "flex", alignItems: "center", background: "rgba(255,252,245,0.9)", borderRadius: 12, border: "1px solid rgba(168,130,90,0.2)", padding: "10px 16px", marginBottom: 18, boxShadow: "0 2px 8px rgba(100,70,40,0.06)" },
   searchIcon: { fontSize: 16, marginRight: 10 },
   searchInput: { flex: 1, border: "none", background: "transparent", fontSize: 15, color: "#3d2b1f", fontFamily: "inherit", outline: "none" },
@@ -446,8 +536,11 @@ const styles = {
   list: { display: "flex", flexDirection: "column", gap: 14 },
   empty: { textAlign: "center", padding: "60px 20px", background: "rgba(255,252,245,0.7)", borderRadius: 16, border: "2px dashed rgba(168,130,90,0.2)" },
   card: { background: "rgba(255,252,245,0.92)", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "flex-start", gap: 16, boxShadow: "0 2px 16px rgba(100,70,40,0.09)", border: "1px solid rgba(168,130,90,0.12)" },
+  cardHoy: { border: "2px solid #c8873a", boxShadow: "0 2px 20px rgba(200,135,58,0.18)" },
   cardLeft: { minWidth: 90 },
   cardDate: { background: "linear-gradient(135deg, #3d2b1f, #6b4226)", borderRadius: 10, padding: "10px 12px", textAlign: "center" },
+  cardDateHoy: { background: "linear-gradient(135deg, #a0622a, #c8873a)" },
+  cardHoyTag: { background: "rgba(255,255,255,0.2)", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.15em", borderRadius: 4, padding: "2px 6px", marginBottom: 4, display: "inline-block" },
   cardDateDay: { color: "#f0d9b5", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase" },
   cardDateTime: { color: "#fff", fontSize: 20, fontWeight: 700, marginTop: 2, letterSpacing: "0.04em" },
   cardBody: { flex: 1 },
@@ -467,9 +560,10 @@ const styles = {
   actionBtn: { background: "#f0e8db", border: "none", borderRadius: 8, padding: "7px 10px", fontSize: 15, cursor: "pointer" },
   formWrap: { maxWidth: 680, margin: "0 auto" },
   formCard: { background: "rgba(255,252,245,0.96)", borderRadius: 18, padding: "30px 32px", boxShadow: "0 8px 40px rgba(100,70,40,0.13)", border: "1px solid rgba(168,130,90,0.15)" },
-  formHeader: { display: "flex", alignItems: "center", gap: 16, marginBottom: 28 },
+  formHeader: { display: "flex", alignItems: "center", gap: 16, marginBottom: 20 },
   backBtn: { background: "transparent", border: "none", color: "#8a6a44", cursor: "pointer", fontSize: 14, fontFamily: "inherit", padding: "6px 10px", borderRadius: 6 },
   formTitle: { margin: 0, fontSize: 22, color: "#2a1a0e", fontWeight: 700, letterSpacing: "0.02em" },
+  bizError: { background: "#fde8e8", border: "1.5px solid #e53e3e", borderRadius: 10, padding: "12px 16px", fontSize: 14, color: "#7a1a1a", marginBottom: 20, lineHeight: 1.5 },
   formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 },
   field: { display: "flex", flexDirection: "column", gap: 6 },
   label: { fontSize: 12, color: "#7a5a3a", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" },
