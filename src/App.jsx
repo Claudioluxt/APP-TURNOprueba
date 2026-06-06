@@ -3,39 +3,39 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ─────────────────────────────────────────────
 //  🔧 CONFIGURACIÓN SUPABASE
+//  Reemplazá estos valores con los de tu proyecto
 // ─────────────────────────────────────────────
 const SUPABASE_URL = 'https://cyrinitjjbdcswakbqli.supabase.co'
 const SUPABASE_ANON_KEY = "sb_publishable_FDD0GpFO814XI6DiCe9bxg_k92hHvlx";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const isConfigured =
-  !SUPABASE_URL.includes("TU_PROJECT_ID") &&
-  !SUPABASE_ANON_KEY.includes("TU_ANON_KEY");
+const isConfigured = !SUPABASE_URL.includes("TU_PROJECT_ID") && !SUPABASE_ANON_KEY.includes("TU_ANON_KEY");
 
 // ─────────────────────────────────────────────
-//  REGLAS DE NEGOCIO
-// ─────────────────────────────────────────────
-const MAX_TURNOS_POR_DIA = 8;
-const DIAS_LABORABLES = [1, 2, 3, 4, 5]; // 0=dom, 1=lun ... 6=sab
-const DIAS_NOMBRES = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 
 const DURATIONS = [30, 45, 60, 90, 120];
-const SERVICES = ["Masaje Relajante", "Masaje Deportivo", "Masaje Descontracturante", "Masaje con Piedras Calientes", "Reflexología"];
+const SERVICES = [
+  "Masaje Intensivo",
+  "Ritual Aura",
+  "Craneofacial",
+  "Descontracturante Cuerpo Completo",
+  "Aura Integral",
+  "Masaje Deportivo",
+];
+
+const SERVICE_INFO = {
+  "Masaje Intensivo":               { duracion: 45,  precio: 30000 },
+  "Ritual Aura":                    { duracion: 120, precio: 47000 },
+  "Craneofacial":                   { duracion: 45,  precio: 29000 },
+  "Descontracturante Cuerpo Completo": { duracion: 60, precio: 33000 },
+  "Aura Integral":                  { duracion: 60,  precio: 35000 },
+  "Masaje Deportivo":               { duracion: 70,  precio: 37000 },
+};
+
+const formatPrecio = (p) => "$" + p.toLocaleString("es-AR");
 
 const formatTime = (date) => date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
 const formatDate = (date) => date.toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "short" });
-const isSameDay = (a, b) => a.toDateString() === b.toDateString();
-const isToday = (date) => isSameDay(date, new Date());
-
-// Verifica si dos turnos se solapan en el tiempo
-const turnosSeSuperponen = (fechaA, durA, fechaB, durB) => {
-  const inicioA = fechaA.getTime();
-  const finA = inicioA + durA * 60000;
-  const inicioB = fechaB.getTime();
-  const finB = inicioB + durB * 60000;
-  return inicioA < finB && finA > inicioB;
-};
 
 const rowToAppt = (row) => ({
   id: row.id, name: row.name, email: row.email, phone: row.phone,
@@ -49,6 +49,16 @@ const statusColors = {
   cancelado:  { bg: "#fde8e8", text: "#7a1a1a", dot: "#e53e3e" },
 };
 
+// Genera los días del mes para el calendario (con padding de semana)
+const getCalDays = (year, month) => {
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+  return cells;
+};
+
 export default function App() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +67,9 @@ export default function App() {
   const [filterHoy, setFilterHoy] = useState(false);
   const [selected, setSelected] = useState(null);
   const [editingDuration, setEditingDuration] = useState(null);
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [selectedCalDay, setSelectedCalDay] = useState(null);
   const [form, setForm] = useState({
     name: "", email: "", phone: "", service: SERVICES[0],
     duration: 60, date: "", time: "", status: "confirmado",
@@ -64,6 +77,8 @@ export default function App() {
   const [errors, setErrors] = useState({});
   const [search, setSearch] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientSort, setClientSort] = useState("name");
 
   useEffect(() => {
     if (!isConfigured) { setLoading(false); return; }
@@ -80,40 +95,7 @@ export default function App() {
 
   const showSuccess = (msg) => {
     setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(""), 3500);
-  };
-
-  // ── Validaciones de negocio ──
-  const validateBusiness = (dateObj, durationMin, excludeId = null) => {
-    const diaSemana = dateObj.getDay();
-
-    // 1. Día laborable
-    if (!DIAS_LABORABLES.includes(diaSemana)) {
-      return `No se trabaja los ${DIAS_NOMBRES[diaSemana]}. Solo se aceptan turnos de lunes a viernes.`;
-    }
-
-    // 2. Límite de turnos por día (solo turnos activos, no cancelados)
-    const turnosDelDia = appointments.filter(a =>
-      isSameDay(a.date, dateObj) &&
-      a.status !== "cancelado" &&
-      a.id !== excludeId
-    );
-    if (turnosDelDia.length >= MAX_TURNOS_POR_DIA) {
-      return `El día ${formatDate(dateObj)} ya tiene ${MAX_TURNOS_POR_DIA} turnos agendados (máximo permitido).`;
-    }
-
-    // 3. Superposición horaria
-    const conflicto = appointments.find(a =>
-      a.id !== excludeId &&
-      a.status !== "cancelado" &&
-      isSameDay(a.date, dateObj) &&
-      turnosSeSuperponen(dateObj, durationMin, a.date, a.duration)
-    );
-    if (conflicto) {
-      return `Conflicto de horario con el turno de ${conflicto.name} a las ${formatTime(conflicto.date)} (${conflicto.duration} min).`;
-    }
-
-    return null;
+    setTimeout(() => setSuccessMsg(""), 3000);
   };
 
   const validate = () => {
@@ -123,13 +105,6 @@ export default function App() {
     if (form.phone.length < 8) e.phone = "Teléfono inválido";
     if (!form.date) e.date = "Fecha requerida";
     if (!form.time) e.time = "Hora requerida";
-
-    if (form.date && form.time) {
-      const dateObj = new Date(`${form.date}T${form.time}`);
-      const bizError = validateBusiness(dateObj, form.duration, selected?.id);
-      if (bizError) e.business = bizError;
-    }
-
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -137,12 +112,7 @@ export default function App() {
   const handleSubmit = async () => {
     if (!validate()) return;
     const dateObj = new Date(`${form.date}T${form.time}`);
-    const payload = {
-      name: form.name, email: form.email, phone: form.phone,
-      service: form.service, duration: form.duration,
-      status: form.status, date: dateObj.toISOString(),
-    };
-
+    const payload = { name: form.name, email: form.email, phone: form.phone, service: form.service, duration: form.duration, status: form.status, date: dateObj.toISOString() };
     if (selected) {
       const { error } = await supabase.from("turnos").update(payload).eq("id", selected.id);
       if (error) { setDbError(error.message); return; }
@@ -168,14 +138,10 @@ export default function App() {
       date: `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`,
       time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
     });
-    setErrors({});
     setView("form");
   };
 
   const updateDuration = async (id, dur) => {
-    const appt = appointments.find(a => a.id === id);
-    const bizError = validateBusiness(appt.date, dur, id);
-    if (bizError) { setDbError(bizError); return; }
     const { error } = await supabase.from("turnos").update({ duration: dur }).eq("id", id);
     if (error) { setDbError(error.message); return; }
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, duration: dur } : a));
@@ -198,21 +164,14 @@ export default function App() {
     showSuccess("Todos los turnos fueron eliminados");
   };
 
-  // ── Turnos de hoy para el contador ──
-  const turnosHoy = appointments.filter(a => isToday(a.date) && a.status !== "cancelado");
-  const cupoHoyUsado = turnosHoy.length;
-  const cupoHoyLibre = MAX_TURNOS_POR_DIA - cupoHoyUsado;
-
   const filtered = appointments
-    .filter(a => {
-      const matchSearch = a.name.toLowerCase().includes(search.toLowerCase()) ||
-        a.service.toLowerCase().includes(search.toLowerCase());
-      const matchHoy = !filterHoy || isToday(a.date);
-      return matchSearch && matchHoy;
-    })
+    .filter(a =>
+      a.name.toLowerCase().includes(search.toLowerCase()) ||
+      a.service.toLowerCase().includes(search.toLowerCase())
+    )
     .sort((a, b) => a.date - b.date);
 
-  // ── Pantalla de configuración ──
+  // ── Pantalla de configuración pendiente ──
   if (!isConfigured) {
     return (
       <div style={styles.root}>
@@ -220,7 +179,7 @@ export default function App() {
         <header style={styles.header}>
           <div style={styles.headerInner}>
             <div>
-              <div style={styles.logo}>✦Relajate o te RELAJO</div>
+              <div style={styles.logo}>✦ SERENITAS</div>
               <div style={styles.logoSub}>Sistema de Turnos · Sala de Masajes</div>
             </div>
           </div>
@@ -233,12 +192,14 @@ export default function App() {
               Para activar la base de datos, reemplazá las credenciales en la parte superior del archivo <code style={styles.code}>App.jsx</code>:
             </p>
             <div style={styles.setupSteps}>
-              {["Creá una cuenta en supabase.com (es gratis)", "Creá un nuevo proyecto", "Andá a SQL Editor y ejecutá el script de abajo", "Copiá la Project URL y la anon key desde Project Settings → API", "Pegálas en las variables SUPABASE_URL y SUPABASE_ANON_KEY"].map((s, i) => (
-                <div key={i} style={styles.step}><span style={styles.stepNum}>{i+1}</span> {s}</div>
-              ))}
+              <div style={styles.step}><span style={styles.stepNum}>1</span> Creá una cuenta en <strong>supabase.com</strong> (es gratis)</div>
+              <div style={styles.step}><span style={styles.stepNum}>2</span> Creá un nuevo proyecto</div>
+              <div style={styles.step}><span style={styles.stepNum}>3</span> Andá a <strong>SQL Editor</strong> y ejecutá el script de abajo</div>
+              <div style={styles.step}><span style={styles.stepNum}>4</span> Copiá la <strong>Project URL</strong> y la <strong>anon key</strong> desde <em>Project Settings → API</em></div>
+              <div style={styles.step}><span style={styles.stepNum}>5</span> Pegálas en las variables <code style={styles.code}>SUPABASE_URL</code> y <code style={styles.code}>SUPABASE_ANON_KEY</code></div>
             </div>
             <div style={styles.sqlBlock}>
-              <div style={styles.sqlTitle}>📋 Script SQL</div>
+              <div style={styles.sqlTitle}>📋 Script SQL — ejecutar en Supabase SQL Editor</div>
               <pre style={styles.sqlCode}>{`create table turnos (
   id uuid default gen_random_uuid() primary key,
   name text not null,
@@ -250,6 +211,8 @@ export default function App() {
   date timestamptz not null,
   created_at timestamptz default now()
 );
+
+-- Permitir acceso público (ajustá según necesites)
 alter table turnos enable row level security;
 create policy "Allow all" on turnos for all using (true);`}</pre>
             </div>
@@ -260,86 +223,73 @@ create policy "Allow all" on turnos for all using (true);`}</pre>
   }
 
   return (
-    <div style={styles.root}>
-      <div style={styles.bgTexture} />
+    <div style={s.root}>
+      <div style={s.bgTexture} />
 
-      <header style={styles.header}>
-        <div style={styles.headerInner}>
+      <header style={s.header}>
+        <div style={s.headerInner}>
           <div>
-            <div style={styles.logo}>✦ NO LELE PANSA</div>
+            <div style={styles.logo}>✦ SERENITAS</div>
             <div style={styles.logoSub}>Sistema de Turnos · Sala de Masajes</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={styles.storageBadge}>🟢 Supabase conectado</div>
-            <button style={styles.newBtn} onClick={() => {
-              setSelected(null);
-              setForm({ name:"",email:"",phone:"",service:SERVICES[0],duration:60,date:"",time:"",status:"confirmado"});
-              setErrors({});
-              setView("form");
-            }}>
+            <div style={s.storageBadge}>🟢 Supabase conectado</div>
+            <button style={s.newBtn} onClick={() => { setSelected(null); setForm({ name:"",email:"",phone:"",service:SERVICES[0],duration:60,date:"",time:"",status:"confirmado"}); setErrors({}); setView("form"); }}>
               <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Nuevo Turno
             </button>
           </div>
         </div>
       </header>
 
-      {successMsg && <div style={styles.toast}>{successMsg}</div>}
+      {/* Tab bar */}
+      <div style={s.tabBar}>
+        <div style={s.tabInner}>
+          {[["list","📋 Turnos"],["calendar","📅 Calendario"],["clients","👥 Clientes"]].map(([v, label]) => (
+            <button key={v} style={{ ...s.tab, ...(view === v || (view === "form" && v === "list") ? s.tabActive : {}) }}
+              onClick={() => setView(v === "list" ? "list" : v)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {successMsg && <div style={s.toast}>{successMsg}</div>}
       {dbError && (
-        <div style={{ ...styles.toast, background: "#e53e3e" }}>
+        <div style={{ ...s.toast, background: "#e53e3e" }}>
           ❌ {dbError}
           <button onClick={() => setDbError(null)} style={{ marginLeft: 12, background: "transparent", border: "none", color: "#fff", cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
       )}
 
-      <main style={styles.main}>
+      <main style={s.main}>
+
+        {/* ═══ VISTA LISTA ═══ */}
         {view === "list" && (
           <>
-            {/* Stats */}
             <div style={styles.statsRow}>
               {[
                 { label: "Total Turnos", value: appointments.length, icon: "📋" },
                 { label: "Confirmados", value: appointments.filter(a=>a.status==="confirmado").length, icon: "✅" },
-                { label: "Pendientes",  value: appointments.filter(a=>a.status==="pendiente").length, icon: "⏳" },
-                { label: "Turnos Hoy",  value: cupoHoyUsado, icon: "📅", sub: `${cupoHoyLibre} lugar${cupoHoyLibre !== 1 ? "es" : ""} libre${cupoHoyLibre !== 1 ? "s" : ""}`, subColor: cupoHoyLibre === 0 ? "#e53e3e" : cupoHoyLibre <= 2 ? "#f0a500" : "#27ae60" },
+                { label: "Pendientes",  value: appointments.filter(a=>a.status==="pendiente").length,  icon: "⏳" },
+                { label: "Hoy", value: appointments.filter(a=>{const t=new Date();return a.date.toDateString()===t.toDateString()}).length, icon: "📅" },
               ].map(s => (
-                <div key={s.label} style={{ ...styles.statCard, cursor: s.label === "Turnos Hoy" ? "pointer" : "default", outline: s.label === "Turnos Hoy" && filterHoy ? "2px solid #c8873a" : "none" }}
-                  onClick={() => s.label === "Turnos Hoy" && setFilterHoy(f => !f)}>
+                <div key={s.label} style={styles.statCard}>
                   <div style={styles.statIcon}>{s.icon}</div>
                   <div style={styles.statValue}>{s.value}</div>
                   <div style={styles.statLabel}>{s.label}</div>
-                  {s.sub && <div style={{ fontSize: 10, color: s.subColor, fontWeight: 700, marginTop: 2 }}>{s.sub}</div>}
                 </div>
               ))}
             </div>
 
-            {/* Alerta cupo lleno hoy */}
-            {cupoHoyLibre === 0 && (
-              <div style={styles.alertaBanner}>
-                ⚠️ <strong>Agenda completa para hoy</strong> — Se alcanzó el límite de {MAX_TURNOS_POR_DIA} turnos diarios.
-              </div>
-            )}
-
-            {/* Filtro hoy activo */}
-            {filterHoy && (
-              <div style={styles.filterBanner}>
-                📅 Mostrando solo turnos de hoy
-                <button style={styles.filterClear} onClick={() => setFilterHoy(false)}>✕ Ver todos</button>
-              </div>
-            )}
-
-            {/* Buscador */}
             <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
               <div style={{ ...styles.searchWrap, marginBottom: 0, flex: 1 }}>
                 <span style={styles.searchIcon}>🔍</span>
                 <input style={styles.searchInput} placeholder="Buscar por nombre o servicio..."
                   value={search} onChange={e => setSearch(e.target.value)} />
               </div>
-              {appointments.length > 0 && (
-                <button style={styles.clearBtn} onClick={clearAllData}>🗑 Limpiar todo</button>
-              )}
+              {appointments.length>0 && <button style={s.clearBtn} onClick={clearAllData}>🗑 Limpiar todo</button>}
             </div>
 
-            {/* Lista */}
             <div style={styles.list}>
               {loading && (
                 <div style={styles.empty}>
@@ -350,56 +300,40 @@ create policy "Allow all" on turnos for all using (true);`}</pre>
               {!loading && filtered.length === 0 && (
                 <div style={styles.empty}>
                   <div style={{ fontSize: 48, marginBottom: 12 }}>🌿</div>
-                  <div style={{ fontFamily: "Georgia, serif", fontSize: 18, color: "#7a6e5f" }}>
-                    {filterHoy ? "No hay turnos para hoy" : "No hay turnos registrados"}
-                  </div>
+                  <div style={{ fontFamily: "Georgia, serif", fontSize: 18, color: "#7a6e5f" }}>No hay turnos registrados</div>
                 </div>
               )}
               {!loading && filtered.map(appt => {
                 const sc = statusColors[appt.status] || statusColors.pendiente;
-                const esHoy = isToday(appt.date);
                 return (
-                  <div key={appt.id} style={{ ...styles.card, ...(esHoy ? styles.cardHoy : {}) }}>
+                  <div key={appt.id} style={styles.card}>
                     <div style={styles.cardLeft}>
-                      <div style={{ ...styles.cardDate, ...(esHoy ? styles.cardDateHoy : {}) }}>
-                        {esHoy && <div style={styles.cardHoyTag}>HOY</div>}
+                      <div style={styles.cardDate}>
                         <div style={styles.cardDateDay}>{formatDate(appt.date)}</div>
                         <div style={styles.cardDateTime}>{formatTime(appt.date)}</div>
                       </div>
                     </div>
-                    <div style={styles.cardBody}>
-                      <div style={styles.cardTop}>
-                        <div>
-                          <div style={styles.cardName}>{appt.name}</div>
-                          <div style={styles.cardService}>{appt.service}</div>
-                        </div>
-                        <span style={{ ...styles.statusBadge, background: sc.bg, color: sc.text }}>
-                          <span style={{ ...styles.statusDot, background: sc.dot }} />
-                          {appt.status}
-                        </span>
+                    <div style={s.cardBody}>
+                      <div style={s.cardTop}>
+                        <div><div style={s.cardName}>{appt.name}</div><div style={s.cardService}>{appt.service}</div></div>
+                        <span style={{ ...s.statusBadge, background:sc.bg, color:sc.text }}><span style={{ ...s.statusDot, background:sc.dot }}/>{appt.status}</span>
                       </div>
-                      <div style={styles.cardInfo}>
-                        <span style={styles.infoChip}>📧 {appt.email}</span>
-                        <span style={styles.infoChip}>📞 {appt.phone}</span>
-                        <span style={styles.infoChip} onClick={() => setEditingDuration(appt.id)} title="Click para editar">
-                          ⏱ {appt.duration} min <span style={styles.editHint}>✏️</span>
-                        </span>
+                      <div style={s.cardInfo}>
+                        <span style={s.infoChip}>📧 {appt.email}</span>
+                        <span style={s.infoChip}>📞 {appt.phone}</span>
+                        <span style={s.infoChip} onClick={()=>setEditingDuration(appt.id)}>⏱ {appt.duration} min <span style={s.editHint}>✏️</span></span>
                       </div>
-                      {editingDuration === appt.id && (
-                        <div style={styles.durationEditor}>
-                          <span style={{ fontSize: 13, color: "#7a6e5f", marginRight: 8 }}>Cambiar duración:</span>
-                          {DURATIONS.map(d => (
-                            <button key={d}
-                              style={{ ...styles.durBtn, ...(appt.duration === d ? styles.durBtnActive : {}) }}
-                              onClick={() => updateDuration(appt.id, d)}>{d}m</button>
-                          ))}
-                          <button style={styles.durCancel} onClick={() => setEditingDuration(null)}>✕</button>
+                      {editingDuration===appt.id && (
+                        <div style={s.durationEditor}>
+                          <span style={{fontSize:13,color:"#7a6e5f",marginRight:8}}>Cambiar duración:</span>
+                          {DURATIONS.map(d=><button key={d} style={{...s.durBtn,...(appt.duration===d?s.durBtnActive:{})}} onClick={()=>updateDuration(appt.id,d)}>{d}m</button>)}
+                          <button style={s.durCancel} onClick={()=>setEditingDuration(null)}>✕</button>
                         </div>
                       )}
                     </div>
-                    <div style={styles.cardActions}>
-                      <button style={styles.actionBtn} title="Editar" onClick={() => openEdit(appt)}>✏️</button>
-                      <button style={{ ...styles.actionBtn, color: "#e53e3e" }} title="Eliminar" onClick={() => deleteAppt(appt.id)}>🗑</button>
+                    <div style={s.cardActions}>
+                      <button style={s.actionBtn} onClick={()=>openEdit(appt)}>✏️</button>
+                      <button style={{...s.actionBtn,color:"#e53e3e"}} onClick={()=>deleteAppt(appt.id)}>🗑</button>
                     </div>
                   </div>
                 );
@@ -408,21 +342,46 @@ create policy "Allow all" on turnos for all using (true);`}</pre>
           </>
         )}
 
+        {/* ═══ VISTA FORMULARIO ═══ */}
         {view === "form" && (
-          <div style={styles.formWrap}>
-            <div style={styles.formCard}>
-              <div style={styles.formHeader}>
-                <button style={styles.backBtn} onClick={() => setView("list")}>← Volver</button>
-                <h2 style={styles.formTitle}>{selected ? "Editar Turno" : "Nuevo Turno"}</h2>
+          <div style={s.formWrap}>
+            <div style={s.formCard}>
+              <div style={s.formHeader}>
+                <button style={s.backBtn} onClick={()=>setView("list")}>← Volver</button>
+                <h2 style={s.formTitle}>{selected?"Editar Turno":"Nuevo Turno"}</h2>
               </div>
-
-              {/* Alerta de error de negocio */}
-              {errors.business && (
-                <div style={styles.bizError}>
-                  ⚠️ {errors.business}
-                </div>
-              )}
-
+              {errors.business && <div style={s.bizError}>⚠️ {errors.business}</div>}
+              <div style={s.formGrid}>
+                <div style={s.field}><label style={s.label}>Nombre del Cliente *</label>
+                  <input style={{...s.input,...(errors.name?s.inputError:{})}} placeholder="Ej: María González" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
+                  {errors.name&&<span style={s.errorMsg}>{errors.name}</span>}</div>
+                <div style={s.field}><label style={s.label}>Correo Electrónico *</label>
+                  <input style={{...s.input,...(errors.email?s.inputError:{})}} placeholder="cliente@email.com" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}/>
+                  {errors.email&&<span style={s.errorMsg}>{errors.email}</span>}</div>
+                <div style={s.field}><label style={s.label}>Teléfono *</label>
+                  <input style={{...s.input,...(errors.phone?s.inputError:{})}} placeholder="+54 11 1234-5678" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))}/>
+                  {errors.phone&&<span style={s.errorMsg}>{errors.phone}</span>}</div>
+                <div style={s.field}><label style={s.label}>Tipo de Masaje</label>
+                  <select style={s.input} value={form.service} onChange={e=>{ const svc=e.target.value; const info=SERVICE_INFO[svc]; setForm(f=>({...f,service:svc,duration:info?info.duracion:f.duration})); }}>
+                    {SERVICES.map(sv=><option key={sv} value={sv}>{sv}{SERVICE_INFO[sv] ? " — " + formatPrecio(SERVICE_INFO[sv].precio) : ""}</option>)}</select></div>
+                <div style={s.field}><label style={s.label}>Fecha *</label>
+                  <input type="date" style={{...s.input,...(errors.date?s.inputError:{})}} value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
+                  {errors.date&&<span style={s.errorMsg}>{errors.date}</span>}
+                  {form.date&&!DIAS_LABORABLES.includes(new Date(form.date+"T12:00").getDay())&&<span style={{...s.errorMsg,color:"#e07a00"}}>⚠️ Fin de semana — no se trabaja</span>}</div>
+                <div style={s.field}><label style={s.label}>Hora *</label>
+                  <input type="time" style={{...s.input,...(errors.time?s.inputError:{})}} value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))}/>
+                  {errors.time&&<span style={s.errorMsg}>{errors.time}</span>}</div>
+                <div style={{...s.field,gridColumn:"1 / -1"}}><label style={s.label}>Duración del Turno</label>
+                  <div style={s.durationPicker}>{DURATIONS.map(d=><button key={d} style={{...s.durPickerBtn,...(form.duration===d?s.durPickerActive:{})}} onClick={()=>setForm(f=>({...f,duration:d}))}>{d} min</button>)}</div></div>
+                <div style={{...s.field,gridColumn:"1 / -1"}}><label style={s.label}>Estado</label>
+                  <div style={{display:"flex",gap:10}}>{["confirmado","pendiente","cancelado"].map(st=>{const sc=statusColors[st];return(
+                    <button key={st} style={{...s.statusBtn,background:form.status===st?sc.bg:"#f5f0eb",color:form.status===st?sc.text:"#9a8e7f",borderColor:form.status===st?sc.dot:"transparent"}} onClick={()=>setForm(f=>({...f,status:st}))}>
+                      <span style={{...s.statusDot,background:sc.dot}}/>{st}</button>);})}</div></div>
+              </div>
+              <div style={s.formFooter}>
+                <button style={s.cancelBtn} onClick={()=>setView("list")}>Cancelar</button>
+                <button style={s.submitBtn} onClick={handleSubmit}>{selected?"Guardar Cambios":"Registrar Turno"}</button>
+              </div>
               <div style={styles.formGrid}>
                 <div style={styles.field}>
                   <label style={styles.label}>Nombre del Cliente *</label>
@@ -457,12 +416,6 @@ create policy "Allow all" on turnos for all using (true);`}</pre>
                   <input type="date" style={{ ...styles.input, ...(errors.date ? styles.inputError : {}) }}
                     value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
                   {errors.date && <span style={styles.errorMsg}>{errors.date}</span>}
-                  {/* Aviso fin de semana en tiempo real */}
-                  {form.date && !DIAS_LABORABLES.includes(new Date(form.date + "T12:00").getDay()) && (
-                    <span style={{ ...styles.errorMsg, color: "#e07a00" }}>
-                      ⚠️ Este día es fin de semana — no se trabaja
-                    </span>
-                  )}
                 </div>
                 <div style={styles.field}>
                   <label style={styles.label}>Hora *</label>
@@ -470,41 +423,187 @@ create policy "Allow all" on turnos for all using (true);`}</pre>
                     value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
                   {errors.time && <span style={styles.errorMsg}>{errors.time}</span>}
                 </div>
-                <div style={{ ...styles.field, gridColumn: "1 / -1" }}>
-                  <label style={styles.label}>Duración del Turno</label>
-                  <div style={styles.durationPicker}>
-                    {DURATIONS.map(d => (
-                      <button key={d}
-                        style={{ ...styles.durPickerBtn, ...(form.duration === d ? styles.durPickerActive : {}) }}
-                        onClick={() => setForm(f => ({ ...f, duration: d }))}>{d} min</button>
-                    ))}
+              ))}
+            </div>
+
+            {/* Panel del día seleccionado */}
+            {selectedCalDay && (
+              <div style={s.calDayPanel}>
+                <div style={s.calDayPanelHeader}>
+                  <div>
+                    <div style={s.calDayPanelTitle}>
+                      {selectedCalDay.toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"})}
+                    </div>
+                    <div style={s.calDayPanelSub}>
+                      {turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length} turno{turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length!==1?"s":""} activo{turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length!==1?"s":""} · {MAX_TURNOS_POR_DIA - turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length} lugar{MAX_TURNOS_POR_DIA - turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length!==1?"es":""} libre{MAX_TURNOS_POR_DIA - turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length!==1?"s":""}
+                    </div>
                   </div>
+                  <button style={s.calNewBtn} onClick={()=>{
+                    const pad = n=>String(n).padStart(2,"0");
+                    const d = selectedCalDay;
+                    setSelected(null);
+                    setForm({name:"",email:"",phone:"",service:SERVICES[0],duration:60,date:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`,time:"",status:"confirmado"});
+                    setErrors({});
+                    setView("form");
+                  }}>+ Nuevo turno este día</button>
                 </div>
-                <div style={{ ...styles.field, gridColumn: "1 / -1" }}>
-                  <label style={styles.label}>Estado</label>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    {["confirmado", "pendiente", "cancelado"].map(s => {
-                      const sc = statusColors[s];
+
+                {turnosDelDiaSeleccionado.length === 0 ? (
+                  <div style={s.calEmpty}>🌿 Sin turnos para este día</div>
+                ) : (
+                  <div style={s.calDayList}>
+                    {turnosDelDiaSeleccionado.map(appt => {
+                      const sc = statusColors[appt.status]||statusColors.pendiente;
                       return (
-                        <button key={s}
-                          style={{ ...styles.statusBtn, background: form.status === s ? sc.bg : "#f5f0eb", color: form.status === s ? sc.text : "#9a8e7f", borderColor: form.status === s ? sc.dot : "transparent" }}
-                          onClick={() => setForm(f => ({ ...f, status: s }))}>
-                          <span style={{ ...styles.statusDot, background: sc.dot }} />{s}
-                        </button>
+                        <div key={appt.id} style={s.calApptRow}>
+                          <div style={s.calApptTime}>{formatTime(appt.date)}<div style={s.calApptDur}>{appt.duration}m</div></div>
+                          <div style={s.calApptInfo}>
+                            <div style={s.calApptName}>{appt.name}</div>
+                            <div style={s.calApptService}>{appt.service}{SERVICE_INFO[appt.service] ? " · " + formatPrecio(SERVICE_INFO[appt.service].precio) : ""}</div>
+                          </div>
+                          <span style={{...s.statusBadge,background:sc.bg,color:sc.text,fontSize:11}}>
+                            <span style={{...s.statusDot,background:sc.dot}}/>{appt.status}
+                          </span>
+                          <button style={s.actionBtn} onClick={()=>openEdit(appt)}>✏️</button>
+                        </div>
                       );
                     })}
                   </div>
-                </div>
+                )}
               </div>
-              <div style={styles.formFooter}>
-                <button style={styles.cancelBtn} onClick={() => setView("list")}>Cancelar</button>
-                <button style={styles.submitBtn} onClick={handleSubmit}>
-                  {selected ? "Guardar Cambios" : "Registrar Turno"}
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         )}
+
+        {/* ═══ VISTA CLIENTES ═══ */}
+        {view === "clients" && (() => {
+          // Consolidar clientes únicos por email
+          const clientMap = {};
+          appointments.forEach(a => {
+            const key = a.email.toLowerCase();
+            if (!clientMap[key]) {
+              clientMap[key] = { name: a.name, email: a.email, phone: a.phone, turnos: [], services: new Set() };
+            }
+            clientMap[key].turnos.push(a);
+            clientMap[key].services.add(a.service);
+          });
+
+          const clients = Object.values(clientMap).map(c => ({
+            ...c,
+            total: c.turnos.length,
+            activos: c.turnos.filter(t => t.status !== "cancelado").length,
+            ultimoTurno: c.turnos.sort((a,b) => b.date - a.date)[0].date,
+            services: [...c.services],
+          }));
+
+          const sorted = [...clients]
+            .filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()) || c.email.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone.includes(clientSearch))
+            .sort((a, b) => {
+              if (clientSort === "name") return a.name.localeCompare(b.name);
+              if (clientSort === "total") return b.total - a.total;
+              if (clientSort === "ultimo") return b.ultimoTurno - a.ultimoTurno;
+              return 0;
+            });
+
+          const exportCSV = () => {
+            const header = ["Nombre","Email","Teléfono","Total turnos","Turnos activos","Último turno","Servicios"];
+            const rows = sorted.map(c => [
+              c.name, c.email, c.phone, c.total, c.activos,
+              c.ultimoTurno.toLocaleDateString("es-AR"),
+              c.services.join(" / ")
+            ]);
+            const csv = [header, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url; a.download = "clientes-serenitas.csv"; a.click();
+            URL.revokeObjectURL(url);
+          };
+
+          return (
+            <div>
+              {/* Header de clientes */}
+              <div style={s.clientsHeader}>
+                <div>
+                  <div style={s.clientsTitle}>👥 Clientes registrados</div>
+                  <div style={s.clientsSub}>{clients.length} cliente{clients.length !== 1 ? "s" : ""} únicos · {appointments.length} turno{appointments.length !== 1 ? "s" : ""} en total</div>
+                </div>
+                <button style={s.exportBtn} onClick={exportCSV}>⬇ Exportar CSV</button>
+              </div>
+
+              {/* Buscador y ordenamiento */}
+              <div style={{ display:"flex", gap:10, marginBottom:18, flexWrap:"wrap" }}>
+                <div style={{ ...s.searchWrap, marginBottom:0, flex:1, minWidth:200 }}>
+                  <span style={s.searchIcon}>🔍</span>
+                  <input style={s.searchInput} placeholder="Buscar por nombre, email o teléfono..." value={clientSearch} onChange={e=>setClientSearch(e.target.value)} />
+                </div>
+                <div style={{ display:"flex", gap:6 }}>
+                  {[["name","A–Z"],["total","Más turnos"],["ultimo","Último turno"]].map(([val,label]) => (
+                    <button key={val} style={{ ...s.sortBtn, ...(clientSort===val ? s.sortBtnActive : {}) }} onClick={()=>setClientSort(val)}>{label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Stats rápidas */}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:20 }}>
+                {[
+                  { label:"Clientes únicos", value: clients.length, icon:"👤" },
+                  { label:"Recaudación total", value: formatPrecio(appointments.filter(a=>a.status!=="cancelado").reduce((acc,a)=>acc+(SERVICE_INFO[a.service]?.precio||0),0)), icon:"💰", small:true },
+                  { label:"Clientes recurrentes", value: clients.filter(c=>c.total>1).length, icon:"🔄" },
+                  { label:"Servicio más elegido", value: (() => { const cnt = {}; appointments.forEach(a=>{ cnt[a.service]=(cnt[a.service]||0)+1; }); return Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0]?.split(" ")[1] || "—"; })(), icon:"💆", small:true },
+                ].map(st => (
+                  <div key={st.label} style={s.statCard}>
+                    <div style={s.statIcon}>{st.icon}</div>
+                    <div style={{ ...s.statValue, fontSize: st.small ? 16 : 28 }}>{st.value}</div>
+                    <div style={s.statLabel}>{st.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tabla */}
+              {sorted.length === 0 ? (
+                <div style={s.empty}><div style={{fontSize:48,marginBottom:12}}>👤</div><div style={{fontFamily:"Georgia,serif",fontSize:18,color:"#7a6e5f"}}>Sin clientes encontrados</div></div>
+              ) : (
+                <div style={s.clientTable}>
+                  <div style={s.clientTableHead}>
+                    <div style={{flex:2}}>Cliente</div>
+                    <div style={{flex:2}}>Contacto</div>
+                    <div style={{flex:2,fontSize:11}}>Servicios</div>
+                    <div style={{flex:"0 0 80px",textAlign:"center"}}>Turnos</div>
+                    <div style={{flex:"0 0 100px",textAlign:"right"}}>Acumulado</div>
+                    <div style={{flex:"0 0 110px",textAlign:"right"}}>Último turno</div>
+                  </div>
+                  {sorted.map((c, i) => (
+                    <div key={c.email} style={{ ...s.clientRow, ...(i%2===0?{}:{background:"rgba(240,232,219,0.3)"}) }}>
+                      <div style={{flex:2}}>
+                        <div style={s.clientName}>{c.name}</div>
+                        {c.total > 1 && <span style={s.recurrentBadge}>🔄 recurrente</span>}
+                      </div>
+                      <div style={{flex:2}}>
+                        <div style={s.clientContact}>📧 {c.email}</div>
+                        <div style={s.clientContact}>📞 {c.phone}</div>
+                      </div>
+                      <div style={{flex:2}}>
+                        {c.services.map(sv => <div key={sv} style={s.serviceTag}>{sv}</div>)}
+                      </div>
+                      <div style={{flex:"0 0 80px",textAlign:"center"}}>
+                        <div style={s.turnosNum}>{c.activos}</div>
+                        {c.activos !== c.total && <div style={{fontSize:10,color:"#9a8060"}}>{c.total} total</div>}
+                      </div>
+                      <div style={{flex:"0 0 100px",textAlign:"right"}}>
+                        <div style={{...s.clientContact, fontWeight:700, color:"#6b4226"}}>{formatPrecio(c.turnos.filter(t=>t.status!=="cancelado").reduce((acc,a)=>acc+(SERVICE_INFO[a.service]?.precio||0),0))}</div>
+                        <div style={{fontSize:10,color:"#9a8060"}}>acumulado</div>
+                      </div>
+                      <div style={{flex:"0 0 110px",textAlign:"right"}}>
+                        <div style={s.clientContact}>{c.ultimoTurno.toLocaleDateString("es-AR",{day:"2-digit",month:"short",year:"numeric"})}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
       </main>
     </div>
   );
@@ -521,14 +620,11 @@ const styles = {
   newBtn: { background: "linear-gradient(135deg, #c8873a, #a0622a)", color: "#fff9f0", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 14, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontWeight: 600, letterSpacing: "0.05em", boxShadow: "0 2px 12px rgba(168,90,36,0.35)" },
   toast: { position: "fixed", top: 80, left: "50%", transform: "translateX(-50%)", background: "#27ae60", color: "#fff", borderRadius: 8, padding: "12px 28px", fontSize: 14, fontFamily: "inherit", zIndex: 100, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", letterSpacing: "0.03em", display: "flex", alignItems: "center", gap: 8 },
   main: { maxWidth: 900, margin: "0 auto", padding: "28px 20px 60px", position: "relative", zIndex: 1 },
-  statsRow: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 18 },
-  statCard: { background: "rgba(255,252,245,0.85)", borderRadius: 14, padding: "18px 14px", textAlign: "center", boxShadow: "0 2px 12px rgba(100,70,40,0.1)", border: "1px solid rgba(168,130,90,0.15)", transition: "transform 0.15s" },
+  statsRow: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 },
+  statCard: { background: "rgba(255,252,245,0.85)", borderRadius: 14, padding: "18px 14px", textAlign: "center", boxShadow: "0 2px 12px rgba(100,70,40,0.1)", border: "1px solid rgba(168,130,90,0.15)" },
   statIcon: { fontSize: 22, marginBottom: 6 },
   statValue: { fontSize: 28, fontWeight: 700, color: "#3d2b1f", lineHeight: 1 },
   statLabel: { fontSize: 11, color: "#9a8060", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4 },
-  alertaBanner: { background: "#fde8e8", border: "1.5px solid #e53e3e", borderRadius: 10, padding: "12px 18px", fontSize: 14, color: "#7a1a1a", marginBottom: 14 },
-  filterBanner: { background: "#fef5dc", border: "1.5px solid #f0a500", borderRadius: 10, padding: "10px 18px", fontSize: 13, color: "#7a5a0a", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" },
-  filterClear: { background: "transparent", border: "none", color: "#7a5a0a", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 13 },
   searchWrap: { display: "flex", alignItems: "center", background: "rgba(255,252,245,0.9)", borderRadius: 12, border: "1px solid rgba(168,130,90,0.2)", padding: "10px 16px", marginBottom: 18, boxShadow: "0 2px 8px rgba(100,70,40,0.06)" },
   searchIcon: { fontSize: 16, marginRight: 10 },
   searchInput: { flex: 1, border: "none", background: "transparent", fontSize: 15, color: "#3d2b1f", fontFamily: "inherit", outline: "none" },
@@ -536,11 +632,8 @@ const styles = {
   list: { display: "flex", flexDirection: "column", gap: 14 },
   empty: { textAlign: "center", padding: "60px 20px", background: "rgba(255,252,245,0.7)", borderRadius: 16, border: "2px dashed rgba(168,130,90,0.2)" },
   card: { background: "rgba(255,252,245,0.92)", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "flex-start", gap: 16, boxShadow: "0 2px 16px rgba(100,70,40,0.09)", border: "1px solid rgba(168,130,90,0.12)" },
-  cardHoy: { border: "2px solid #c8873a", boxShadow: "0 2px 20px rgba(200,135,58,0.18)" },
   cardLeft: { minWidth: 90 },
   cardDate: { background: "linear-gradient(135deg, #3d2b1f, #6b4226)", borderRadius: 10, padding: "10px 12px", textAlign: "center" },
-  cardDateHoy: { background: "linear-gradient(135deg, #a0622a, #c8873a)" },
-  cardHoyTag: { background: "rgba(255,255,255,0.2)", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.15em", borderRadius: 4, padding: "2px 6px", marginBottom: 4, display: "inline-block" },
   cardDateDay: { color: "#f0d9b5", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase" },
   cardDateTime: { color: "#fff", fontSize: 20, fontWeight: 700, marginTop: 2, letterSpacing: "0.04em" },
   cardBody: { flex: 1 },
@@ -560,10 +653,9 @@ const styles = {
   actionBtn: { background: "#f0e8db", border: "none", borderRadius: 8, padding: "7px 10px", fontSize: 15, cursor: "pointer" },
   formWrap: { maxWidth: 680, margin: "0 auto" },
   formCard: { background: "rgba(255,252,245,0.96)", borderRadius: 18, padding: "30px 32px", boxShadow: "0 8px 40px rgba(100,70,40,0.13)", border: "1px solid rgba(168,130,90,0.15)" },
-  formHeader: { display: "flex", alignItems: "center", gap: 16, marginBottom: 20 },
+  formHeader: { display: "flex", alignItems: "center", gap: 16, marginBottom: 28 },
   backBtn: { background: "transparent", border: "none", color: "#8a6a44", cursor: "pointer", fontSize: 14, fontFamily: "inherit", padding: "6px 10px", borderRadius: 6 },
   formTitle: { margin: 0, fontSize: 22, color: "#2a1a0e", fontWeight: 700, letterSpacing: "0.02em" },
-  bizError: { background: "#fde8e8", border: "1.5px solid #e53e3e", borderRadius: 10, padding: "12px 16px", fontSize: 14, color: "#7a1a1a", marginBottom: 20, lineHeight: 1.5 },
   formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 },
   field: { display: "flex", flexDirection: "column", gap: 6 },
   label: { fontSize: 12, color: "#7a5a3a", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" },
