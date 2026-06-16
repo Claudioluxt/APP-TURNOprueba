@@ -1,766 +1,194 @@
 import { useState, useEffect } from "react";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { supabase, isConfigured, getRol } from "./lib/supabase";
+import { useTurnos } from "./hooks/useTurnos";
+import Login from "./components/Login";
+import Header from "./components/Header";
+import TurnosList from "./components/TurnosList";
+import TurnoForm from "./components/TurnoForm";
+import Calendario from "./components/Calendario";
+import Clientes from "./components/Clientes";
+import PortalCliente from "./components/PortalCliente";
 
-const SUPABASE_URL = 'https://cyrinitjjbdcswakbqli.supabase.co'
-const SUPABASE_ANON_KEY = "sb_publishable_FDD0GpFO814XI6DiCe9bxg_k92hHvlx";
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const isConfigured = !SUPABASE_URL.includes("TU_PROJECT_ID") && !SUPABASE_ANON_KEY.includes("TU_ANON_KEY");
-
-const MAX_TURNOS_POR_DIA = 8;
-const DIAS_LABORABLES = [1, 2, 3, 4, 5];
-const DIAS_NOMBRES = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
-const DIAS_CORTOS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-
-const DURATIONS = [30, 45, 60, 90, 120];
-const SERVICES = [
-  "Masaje Intensivo",
-  "Ritual Aura",
-  "Craneofacial",
-  "Descontracturante Cuerpo Completo",
-  "Aura Integral",
-  "Masaje Deportivo",
-];
-
-const SERVICE_INFO = {
-  "Masaje Intensivo":               { duracion: 45,  precio: 30000 },
-  "Ritual Aura":                    { duracion: 120, precio: 47000 },
-  "Craneofacial":                   { duracion: 45,  precio: 29000 },
-  "Descontracturante Cuerpo Completo": { duracion: 60, precio: 33000 },
-  "Aura Integral":                  { duracion: 60,  precio: 35000 },
-  "Masaje Deportivo":               { duracion: 70,  precio: 37000 },
+const s = {
+  root: { minHeight:"100vh", background:"#faf6f0", fontFamily:"'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif", position:"relative" },
+  bgTexture: { position:"fixed", inset:0, backgroundImage:"radial-gradient(ellipse at 20% 20%,#e8ddd0 0%,transparent 60%),radial-gradient(ellipse at 80% 80%,#d4c9bc 0%,transparent 60%)", pointerEvents:"none", zIndex:0 },
+  tabBar: { background:"rgba(255,252,245,0.95)", borderBottom:"1px solid rgba(168,130,90,0.2)", position:"relative", zIndex:9 },
+  tabInner: { maxWidth:900, margin:"0 auto", padding:"0 20px", display:"flex", gap:4 },
+  tab: { background:"transparent", border:"none", borderBottom:"3px solid transparent", padding:"14px 20px", fontSize:14, fontFamily:"inherit", cursor:"pointer", color:"#9a8060", fontWeight:600, letterSpacing:"0.04em" },
+  tabActive: { color:"#3d2b1f", borderBottomColor:"#c8873a" },
+  toast: { position:"fixed", top:16, left:"50%", transform:"translateX(-50%)", background:"#27ae60", color:"#fff", borderRadius:8, padding:"12px 28px", fontSize:14, fontFamily:"inherit", zIndex:100, boxShadow:"0 4px 16px rgba(0,0,0,0.15)", display:"flex", alignItems:"center", gap:8 },
+  main: { maxWidth:900, margin:"0 auto", padding:"28px 20px 60px", position:"relative", zIndex:1 },
+  noAccess: { textAlign:"center", padding:"80px 20px" },
+  noAccessTitle: { fontSize:22, color:"#2a1a0e", fontWeight:700, marginBottom:12 },
+  noAccessText: { color:"#8a6a44", fontSize:15 },
+  configCard: { background:"rgba(255,252,245,0.96)", borderRadius:18, padding:"40px 36px", maxWidth:600, margin:"60px auto", boxShadow:"0 8px 40px rgba(100,70,40,0.13)", border:"1px solid rgba(168,130,90,0.15)", textAlign:"center" },
 };
 
-const formatPrecio = (p) => "$" + p.toLocaleString("es-AR");
-
-const formatTime = (date) => date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
-const formatDate = (date) => date.toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "short" });
-const isSameDay = (a, b) => a.toDateString() === b.toDateString();
-const isToday = (date) => isSameDay(date, new Date());
-
-const turnosSeSuperponen = (fechaA, durA, fechaB, durB) => {
-  const inicioA = fechaA.getTime(), finA = inicioA + durA * 60000;
-  const inicioB = fechaB.getTime(), finB = inicioB + durB * 60000;
-  return inicioA < finB && finA > inicioB;
-};
-
-const rowToAppt = (row) => ({
-  id: row.id, name: row.name, email: row.email, phone: row.phone,
-  service: row.service, duration: row.duration, status: row.status,
-  date: new Date(row.date),
-});
-
-const statusColors = {
-  confirmado: { bg: "#d4f4e7", text: "#1a7a4a", dot: "#27ae60" },
-  pendiente:  { bg: "#fef5dc", text: "#7a5a0a", dot: "#f0a500" },
-  cancelado:  { bg: "#fde8e8", text: "#7a1a1a", dot: "#e53e3e" },
-};
-
-// Genera los días del mes para el calendario (con padding de semana)
-const getCalDays = (year, month) => {
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < firstDay; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
-  return cells;
-};
+const esPortalPublico = () =>
+  window.location.pathname === "/reservar" ||
+  window.location.hash === "#/reservar" ||
+  window.location.search.includes("portal=1");
 
 export default function App() {
-  const [appointments, setAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [dbError, setDbError] = useState(null);
-  const [view, setView] = useState("list");
-  const [filterHoy, setFilterHoy] = useState(false);
+  const [user, setUser]         = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [view, setView]         = useState("list");
   const [selected, setSelected] = useState(null);
-  const [editingDuration, setEditingDuration] = useState(null);
-  const [calYear, setCalYear] = useState(new Date().getFullYear());
-  const [calMonth, setCalMonth] = useState(new Date().getMonth());
-  const [selectedCalDay, setSelectedCalDay] = useState(null);
-  const [form, setForm] = useState({
-    name: "", email: "", phone: "", service: SERVICES[0],
-    duration: 60, date: "", time: "", status: "confirmado",
-  });
-  const [errors, setErrors] = useState({});
-  const [search, setSearch] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  const [filterHoy, setFilterHoy] = useState(false);
+  const [search, setSearch]     = useState("");
   const [clientSearch, setClientSearch] = useState("");
-  const [clientSort, setClientSort] = useState("name");
+  const [clientSort, setClientSort]     = useState("name");
+  const [toast, setToast]       = useState("");
+
+  const { appointments, loading, dbError, setDbError, save, remove, updateDuration, clearAll } = useTurnos(user);
 
   useEffect(() => {
-    if (!isConfigured) { setLoading(false); return; }
-    fetchAppointments();
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user || null);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUser(session?.user || null);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
-  const fetchAppointments = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from("turnos").select("*").order("date", { ascending: true });
-    if (error) setDbError(error.message);
-    else setAppointments(data.map(rowToAppt));
-    setLoading(false);
-  };
+  // 1. Mostrar portal público si entran por el link de reserva
+  if (esPortalPublico()) return <PortalCliente />;
 
-  const showSuccess = (msg) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(""), 3500); };
+  // 2. Pantalla de carga mientras se verifica la sesión
+  if (authLoading) return (
+    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(160deg,#2a1a0e,#6b4226)" }}>
+      <div style={{ color:"#f0d9b5", fontSize:28, fontFamily:"Georgia,serif", letterSpacing:"0.1em" }}>✦ AURA MASAJES</div>
+    </div>
+  );
 
-  const validateBusiness = (dateObj, durationMin, excludeId = null) => {
-    const diaSemana = dateObj.getDay();
-    if (!DIAS_LABORABLES.includes(diaSemana))
-      return `No se trabaja los ${DIAS_NOMBRES[diaSemana]}. Solo lunes a viernes.`;
-    const turnosDelDia = appointments.filter(a =>
-      isSameDay(a.date, dateObj) && a.status !== "cancelado" && a.id !== excludeId);
-    if (turnosDelDia.length >= MAX_TURNOS_POR_DIA)
-      return `El ${formatDate(dateObj)} ya tiene ${MAX_TURNOS_POR_DIA} turnos (máximo permitido).`;
-    const conflicto = appointments.find(a =>
-      a.id !== excludeId && a.status !== "cancelado" &&
-      isSameDay(a.date, dateObj) && turnosSeSuperponen(dateObj, durationMin, a.date, a.duration));
-    if (conflicto)
-      return `Conflicto con el turno de ${conflicto.name} a las ${formatTime(conflicto.date)} (${conflicto.duration} min).`;
-    return null;
-  };
+  // 3. Pantalla de Login si no hay nadie conectado
+  if (!user) return <Login />;
 
-  const validate = () => {
-    const e = {};
-    if (!form.name.trim()) e.name = "Nombre requerido";
-    if (!form.email.includes("@")) e.email = "Email inválido";
-    if (form.phone.length < 8) e.phone = "Teléfono inválido";
-    if (!form.date) e.date = "Fecha requerida";
-    if (!form.time) e.time = "Hora requerida";
-    if (form.date && form.time) {
-      const biz = validateBusiness(new Date(`${form.date}T${form.time}`), form.duration, selected?.id);
-      if (biz) e.business = biz;
-    }
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
+  if (!isConfigured) return (
+    <div style={s.root}>
+      <div style={s.bgTexture}/>
+      <div style={s.configCard}>
+        <div style={{fontSize:48,marginBottom:16}}>⚙️</div>
+        <div style={{fontSize:22,fontWeight:700,color:"#2a1a0e",marginBottom:12}}>Configurá Supabase</div>
+      </div>
+    </div>
+  );
 
-  const handleSubmit = async () => {
-    if (!validate()) return;
-    const dateObj = new Date(`${form.date}T${form.time}`);
-    const payload = { name: form.name, email: form.email, phone: form.phone, service: form.service, duration: form.duration, status: form.status, date: dateObj.toISOString() };
-    if (selected) {
-      const { error } = await supabase.from("turnos").update(payload).eq("id", selected.id);
-      if (error) { setDbError(error.message); return; }
-      showSuccess("Turno actualizado correctamente");
-    } else {
-      const { error } = await supabase.from("turnos").insert([payload]);
-      if (error) { setDbError(error.message); return; }
-      showSuccess("Turno registrado exitosamente");
-    }
-    await fetchAppointments();
-    setView("list");
-    setSelected(null);
-    setForm({ name: "", email: "", phone: "", service: SERVICES[0], duration: 60, date: "", time: "", status: "confirmado" });
-  };
+  // 4. AHORA SÍ: El usuario está logueado correctamente, verificamos su rol
+  const rol = getRol(user?.email);
 
-  const openEdit = (appt) => {
-    const d = appt.date;
-    const pad = n => String(n).padStart(2, "0");
-    setSelected(appt);
-    setForm({ name: appt.name, email: appt.email, phone: appt.phone, service: appt.service, duration: appt.duration, status: appt.status, date: `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`, time: `${pad(d.getHours())}:${pad(d.getMinutes())}` });
-    setErrors({});
-    setView("form");
-  };
-
-  const updateDuration = async (id, dur) => {
-    const appt = appointments.find(a => a.id === id);
-    const biz = validateBusiness(appt.date, dur, id);
-    if (biz) { setDbError(biz); return; }
-    const { error } = await supabase.from("turnos").update({ duration: dur }).eq("id", id);
-    if (error) { setDbError(error.message); return; }
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, duration: dur } : a));
-    setEditingDuration(null);
-    showSuccess("Duración actualizada");
-  };
-
-  const deleteAppt = async (id) => {
-    const { error } = await supabase.from("turnos").delete().eq("id", id);
-    if (error) { setDbError(error.message); return; }
-    setAppointments(prev => prev.filter(a => a.id !== id));
-    showSuccess("Turno eliminado");
-  };
-
-  const clearAllData = async () => {
-    if (!window.confirm("¿Eliminar TODOS los turnos? Esta acción no se puede deshacer.")) return;
-    const { error } = await supabase.from("turnos").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    if (error) { setDbError(error.message); return; }
-    setAppointments([]);
-    showSuccess("Todos los turnos fueron eliminados");
-  };
-
-  const turnosHoy = appointments.filter(a => isToday(a.date) && a.status !== "cancelado");
-  const cupoHoyUsado = turnosHoy.length;
-  const cupoHoyLibre = MAX_TURNOS_POR_DIA - cupoHoyUsado;
-
-  const filtered = appointments
-    .filter(a => {
-      const ms = a.name.toLowerCase().includes(search.toLowerCase()) || a.service.toLowerCase().includes(search.toLowerCase());
-      return ms && (!filterHoy || isToday(a.date));
-    })
-    .sort((a, b) => a.date - b.date);
-
-  // ── Datos del calendario ──
-  const calDays = getCalDays(calYear, calMonth);
-  const getTurnosDia = (date) => date ? appointments.filter(a => isSameDay(a.date, date) && a.status !== "cancelado") : [];
-  const turnosDelDiaSeleccionado = selectedCalDay ? appointments.filter(a => isSameDay(a.date, selectedCalDay)).sort((a,b) => a.date - b.date) : [];
-
-  const navCalMes = (delta) => {
-    let m = calMonth + delta, y = calYear;
-    if (m < 0) { m = 11; y--; }
-    if (m > 11) { m = 0; y++; }
-    setCalMonth(m); setCalYear(y); setSelectedCalDay(null);
-  };
-
-  if (!isConfigured) {
+  // ─── BLOQUEO EXCLUSIVO PARA CLIENTES ───
+  if (rol === "cliente") {
     return (
-      <div style={s.root}><div style={s.bgTexture} />
-        <header style={s.header}><div style={s.headerInner}><div><div style={s.logo}>✦ AURA MASAJES</div><div style={s.logoSub}>Sistema de Turnos · Aura Masajes</div></div></div></header>
-        <main style={s.main}>
-          <div style={s.setupCard}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>⚙️</div>
-            <h2 style={s.setupTitle}>Configuración de Supabase</h2>
-            <p style={s.setupText}>Reemplazá las credenciales en la parte superior del archivo <code style={s.code}>App.jsx</code>:</p>
-            <div style={s.setupSteps}>
-              {["Creá una cuenta en supabase.com (gratis)","Creá un nuevo proyecto","Ejecutá el script SQL en SQL Editor","Copiá Project URL y anon key desde Settings → API","Pegálas en SUPABASE_URL y SUPABASE_ANON_KEY"].map((t,i) => (
-                <div key={i} style={s.step}><span style={s.stepNum}>{i+1}</span>{t}</div>
-              ))}
-            </div>
-            <div style={s.sqlBlock}><div style={s.sqlTitle}>📋 Script SQL</div>
-              <pre style={s.sqlCode}>{`create table turnos (\n  id uuid default gen_random_uuid() primary key,\n  name text not null, email text not null,\n  phone text not null, service text not null,\n  duration integer not null default 60,\n  status text not null default 'pendiente',\n  date timestamptz not null,\n  created_at timestamptz default now()\n);\nalter table turnos enable row level security;\ncreate policy "Allow all" on turnos for all using (true);`}</pre>
-            </div>
-          </div>
-        </main>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+        <Header user={user} onNuevoTurno={() => {}} />
+        <div style={{ flex: 1, position: "relative", zIndex: 1 }}>
+          <PortalCliente />
+        </div>
       </div>
     );
   }
+  // ─────────────────────────────────────────
+
+  const showToast = (msg) => { setToast(msg); setTimeout(()=>setToast(""),3500); };
+
+  const handleSave = async (form, selectedId) => {
+    const result = await save(form, selectedId);
+    if (!result.error) {
+      showToast(selectedId ? "Turno actualizado ✓" : "Turno registrado ✓");
+      setView("list"); setSelected(null);
+    }
+    return result;
+  };
+
+  const handleDelete = async (id) => {
+    const err = await remove(id);
+    if (err) setDbError(err);
+    else showToast("Turno eliminado");
+  };
+
+  const handleUpdateDuration = async (id, dur) => {
+    const err = await updateDuration(id, dur);
+    if (err) setDbError(err);
+    else showToast("Duración actualizada ✓");
+    return err;
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm("¿Eliminar TODOS los turnos?")) return;
+    const err = await clearAll();
+    if (err) setDbError(err);
+    else showToast("Todos los turnos eliminados");
+  };
+
+  const handleNewForDay = (date) => {
+    const pad = n=>String(n).padStart(2,"0");
+    setSelected({ _prefillDate:`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}` });
+    setView("form");
+  };
+
+  const handleEdit = (appt) => { setSelected(appt); setView("form"); };
+
+  const tabs = [
+    { id:"list",     label:"📋 Turnos" },
+    { id:"calendar", label:"📅 Calendario" },
+    ...(rol==="admin" ? [{ id:"clients", label:"👥 Clientes" }] : []),
+  ];
 
   return (
     <div style={s.root}>
-      <div style={s.bgTexture} />
+      <div style={s.bgTexture}/>
+      <Header user={user} onNuevoTurno={()=>{ setSelected(null); setView("form"); }}/>
 
-      <header style={s.header}>
-        <div style={s.headerInner}>
-          <div>
-            <div style={s.logo}>✦ AURA MASAJES</div>
-            <div style={s.logoSub}>Sistema de Turnos · Aura Masajes</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={s.storageBadge}>🟢 Supabase conectado</div>
-            <button style={s.newBtn} onClick={() => { setSelected(null); setForm({ name:"",email:"",phone:"",service:SERVICES[0],duration:60,date:"",time:"",status:"confirmado"}); setErrors({}); setView("form"); }}>
-              <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Nuevo Turno
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Tab bar */}
       <div style={s.tabBar}>
         <div style={s.tabInner}>
-          {[["list","📋 Turnos"],["calendar","📅 Calendario"],["clients","👥 Clientes"]].map(([v, label]) => (
-            <button key={v} style={{ ...s.tab, ...(view === v || (view === "form" && v === "list") ? s.tabActive : {}) }}
-              onClick={() => setView(v === "list" ? "list" : v)}>
-              {label}
+          {tabs.map(t=>(
+            <button key={t.id}
+              style={{...s.tab,...(view===t.id||(view==="form"&&t.id==="list")?s.tabActive:{})}}
+              onClick={()=>setView(t.id)}>
+              {t.label}
             </button>
           ))}
         </div>
       </div>
 
-      {successMsg && <div style={s.toast}>{successMsg}</div>}
+      {toast && <div style={s.toast}>{toast}</div>}
       {dbError && (
-        <div style={{ ...s.toast, background: "#e53e3e" }}>
+        <div style={{...s.toast,background:"#e53e3e"}}>
           ❌ {dbError}
-          <button onClick={() => setDbError(null)} style={{ marginLeft: 12, background: "transparent", border: "none", color: "#fff", cursor: "pointer", fontSize: 16 }}>✕</button>
+          <button onClick={()=>setDbError(null)} style={{marginLeft:12,background:"transparent",border:"none",color:"#fff",cursor:"pointer",fontSize:16}}>✕</button>
         </div>
       )}
 
       <main style={s.main}>
-
-        {/* ═══ VISTA LISTA ═══ */}
-        {view === "list" && (
-          <>
-            <div style={s.statsRow}>
-              {[
-                { label: "Total Turnos", value: appointments.length, icon: "📋" },
-                { label: "Confirmados", value: appointments.filter(a=>a.status==="confirmado").length, icon: "✅" },
-                { label: "Pendientes",  value: appointments.filter(a=>a.status==="pendiente").length, icon: "⏳" },
-                { label: "Turnos Hoy",  value: cupoHoyUsado, icon: "📅", sub: `${cupoHoyLibre} lugar${cupoHoyLibre!==1?"es":""} libre${cupoHoyLibre!==1?"s":""}`, subColor: cupoHoyLibre===0?"#e53e3e":cupoHoyLibre<=2?"#f0a500":"#27ae60" },
-              ].map(st => (
-                <div key={st.label} style={{ ...s.statCard, cursor: st.label==="Turnos Hoy"?"pointer":"default", outline: st.label==="Turnos Hoy"&&filterHoy?"2px solid #c8873a":"none" }}
-                  onClick={() => st.label==="Turnos Hoy" && setFilterHoy(f=>!f)}>
-                  <div style={s.statIcon}>{st.icon}</div>
-                  <div style={s.statValue}>{st.value}</div>
-                  <div style={s.statLabel}>{st.label}</div>
-                  {st.sub && <div style={{ fontSize:10, color:st.subColor, fontWeight:700, marginTop:2 }}>{st.sub}</div>}
-                </div>
-              ))}
-            </div>
-
-            {cupoHoyLibre===0 && <div style={s.alertaBanner}>⚠️ <strong>Agenda completa para hoy</strong> — Límite de {MAX_TURNOS_POR_DIA} turnos alcanzado.</div>}
-            {filterHoy && <div style={s.filterBanner}>📅 Mostrando solo turnos de hoy <button style={s.filterClear} onClick={()=>setFilterHoy(false)}>✕ Ver todos</button></div>}
-
-            <div style={{ display:"flex", gap:10, marginBottom:18 }}>
-              <div style={{ ...s.searchWrap, marginBottom:0, flex:1 }}>
-                <span style={s.searchIcon}>🔍</span>
-                <input style={s.searchInput} placeholder="Buscar por nombre o servicio..." value={search} onChange={e=>setSearch(e.target.value)} />
-              </div>
-              {appointments.length>0 && <button style={s.clearBtn} onClick={clearAllData}>🗑 Limpiar todo</button>}
-            </div>
-
-            <div style={s.list}>
-              {loading && <div style={s.empty}><div style={{fontSize:36,marginBottom:10}}>⏳</div><div style={{color:"#7a6e5f"}}>Cargando turnos...</div></div>}
-              {!loading && filtered.length===0 && <div style={s.empty}><div style={{fontSize:48,marginBottom:12}}>🌿</div><div style={{fontFamily:"Georgia,serif",fontSize:18,color:"#7a6e5f"}}>{filterHoy?"No hay turnos para hoy":"No hay turnos registrados"}</div></div>}
-              {!loading && filtered.map(appt => {
-                const sc = statusColors[appt.status]||statusColors.pendiente;
-                const esHoy = isToday(appt.date);
-                return (
-                  <div key={appt.id} style={{ ...s.card, ...(esHoy?s.cardHoy:{}) }}>
-                    <div style={s.cardLeft}>
-                      <div style={{ ...s.cardDate, ...(esHoy?s.cardDateHoy:{}) }}>
-                        {esHoy && <div style={s.cardHoyTag}>HOY</div>}
-                        <div style={s.cardDateDay}>{formatDate(appt.date)}</div>
-                        <div style={s.cardDateTime}>{formatTime(appt.date)}</div>
-                      </div>
-                    </div>
-                    <div style={s.cardBody}>
-                      <div style={s.cardTop}>
-                        <div><div style={s.cardName}>{appt.name}</div><div style={s.cardService}>{appt.service}</div></div>
-                        <span style={{ ...s.statusBadge, background:sc.bg, color:sc.text }}><span style={{ ...s.statusDot, background:sc.dot }}/>{appt.status}</span>
-                      </div>
-                      <div style={s.cardInfo}>
-                        <span style={s.infoChip}>📧 {appt.email}</span>
-                        <span style={s.infoChip}>📞 {appt.phone}</span>
-                        <span style={s.infoChip} onClick={()=>setEditingDuration(appt.id)}>⏱ {appt.duration} min <span style={s.editHint}>✏️</span></span>
-                      </div>
-                      {editingDuration===appt.id && (
-                        <div style={s.durationEditor}>
-                          <span style={{fontSize:13,color:"#7a6e5f",marginRight:8}}>Cambiar duración:</span>
-                          {DURATIONS.map(d=><button key={d} style={{...s.durBtn,...(appt.duration===d?s.durBtnActive:{})}} onClick={()=>updateDuration(appt.id,d)}>{d}m</button>)}
-                          <button style={s.durCancel} onClick={()=>setEditingDuration(null)}>✕</button>
-                        </div>
-                      )}
-                    </div>
-                    <div style={s.cardActions}>
-                      <button style={s.actionBtn} onClick={()=>openEdit(appt)}>✏️</button>
-                      <button style={{...s.actionBtn,color:"#e53e3e"}} onClick={()=>deleteAppt(appt.id)}>🗑</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
+        {view==="list" && (
+          <TurnosList appointments={appointments} loading={loading} rol={rol}
+            search={search} setSearch={setSearch}
+            filterHoy={filterHoy} setFilterHoy={setFilterHoy}
+            onEdit={handleEdit} onDelete={handleDelete}
+            onUpdateDuration={handleUpdateDuration} onClearAll={handleClearAll}/>
         )}
-
-        {/* ═══ VISTA FORMULARIO ═══ */}
-        {view === "form" && (
-          <div style={s.formWrap}>
-            <div style={s.formCard}>
-              <div style={s.formHeader}>
-                <button style={s.backBtn} onClick={()=>setView("list")}>← Volver</button>
-                <h2 style={s.formTitle}>{selected?"Editar Turno":"Nuevo Turno"}</h2>
-              </div>
-              {errors.business && <div style={s.bizError}>⚠️ {errors.business}</div>}
-              <div style={s.formGrid}>
-                <div style={s.field}><label style={s.label}>Nombre del Cliente *</label>
-                  <input style={{...s.input,...(errors.name?s.inputError:{})}} placeholder="Ej: María González" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
-                  {errors.name&&<span style={s.errorMsg}>{errors.name}</span>}</div>
-                <div style={s.field}><label style={s.label}>Correo Electrónico *</label>
-                  <input style={{...s.input,...(errors.email?s.inputError:{})}} placeholder="cliente@email.com" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}/>
-                  {errors.email&&<span style={s.errorMsg}>{errors.email}</span>}</div>
-                <div style={s.field}><label style={s.label}>Teléfono *</label>
-                  <input style={{...s.input,...(errors.phone?s.inputError:{})}} placeholder="+54 11 1234-5678" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))}/>
-                  {errors.phone&&<span style={s.errorMsg}>{errors.phone}</span>}</div>
-                <div style={s.field}><label style={s.label}>Tipo de Masaje</label>
-                  <select style={s.input} value={form.service} onChange={e=>{ const svc=e.target.value; const info=SERVICE_INFO[svc]; setForm(f=>({...f,service:svc,duration:info?info.duracion:f.duration})); }}>
-                    {SERVICES.map(sv=><option key={sv} value={sv}>{sv}{SERVICE_INFO[sv] ? " — " + formatPrecio(SERVICE_INFO[sv].precio) : ""}</option>)}</select></div>
-                <div style={s.field}><label style={s.label}>Fecha *</label>
-                  <input type="date" style={{...s.input,...(errors.date?s.inputError:{})}} value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
-                  {errors.date&&<span style={s.errorMsg}>{errors.date}</span>}
-                  {form.date&&!DIAS_LABORABLES.includes(new Date(form.date+"T12:00").getDay())&&<span style={{...s.errorMsg,color:"#e07a00"}}>⚠️ Fin de semana — no se trabaja</span>}</div>
-                <div style={s.field}><label style={s.label}>Hora *</label>
-                  <input type="time" style={{...s.input,...(errors.time?s.inputError:{})}} value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))}/>
-                  {errors.time&&<span style={s.errorMsg}>{errors.time}</span>}</div>
-                <div style={{...s.field,gridColumn:"1 / -1"}}><label style={s.label}>Duración del Turno</label>
-                  <div style={s.durationPicker}>{DURATIONS.map(d=><button key={d} style={{...s.durPickerBtn,...(form.duration===d?s.durPickerActive:{})}} onClick={()=>setForm(f=>({...f,duration:d}))}>{d} min</button>)}</div></div>
-                <div style={{...s.field,gridColumn:"1 / -1"}}><label style={s.label}>Estado</label>
-                  <div style={{display:"flex",gap:10}}>{["confirmado","pendiente","cancelado"].map(st=>{const sc=statusColors[st];return(
-                    <button key={st} style={{...s.statusBtn,background:form.status===st?sc.bg:"#f5f0eb",color:form.status===st?sc.text:"#9a8e7f",borderColor:form.status===st?sc.dot:"transparent"}} onClick={()=>setForm(f=>({...f,status:st}))}>
-                      <span style={{...s.statusDot,background:sc.dot}}/>{st}</button>);})}</div></div>
-              </div>
-              <div style={s.formFooter}>
-                <button style={s.cancelBtn} onClick={()=>setView("list")}>Cancelar</button>
-                <button style={s.submitBtn} onClick={handleSubmit}>{selected?"Guardar Cambios":"Registrar Turno"}</button>
-              </div>
-            </div>
+        {view==="form" && (
+          <TurnoForm selected={selected?._prefillDate?null:selected}
+            prefillDate={selected?._prefillDate}
+            onBack={()=>{ setView("list"); setSelected(null); }}
+            onSave={handleSave}/>
+        )}
+        {view==="calendar" && (
+          <Calendario appointments={appointments} onEdit={handleEdit} onNewForDay={handleNewForDay}/>
+        )}
+        {view==="clients" && rol==="admin" && (
+          <Clientes appointments={appointments} search={clientSearch} setSearch={setClientSearch} sort={clientSort} setSort={setClientSort}/>
+        )}
+        {view==="clients" && rol!=="admin" && (
+          <div style={s.noAccess}>
+            <div style={s.noAccessTitle}>🔒 Acceso restringido</div>
+            <div style={s.noAccessText}>Solo el administrador puede ver esta sección.</div>
           </div>
         )}
-
-        {/* ═══ VISTA CALENDARIO ═══ */}
-        {view === "calendar" && (
-          <div style={s.calWrap}>
-            {/* Navegación mes */}
-            <div style={s.calHeader}>
-              <button style={s.calNavBtn} onClick={()=>navCalMes(-1)}>‹</button>
-              <div style={s.calTitle}>{MESES[calMonth]} {calYear}</div>
-              <button style={s.calNavBtn} onClick={()=>navCalMes(1)}>›</button>
-            </div>
-
-            {/* Grilla del calendario */}
-            <div style={s.calGrid}>
-              {DIAS_CORTOS.map(d => <div key={d} style={s.calDayHeader}>{d}</div>)}
-              {calDays.map((date, i) => {
-                if (!date) return <div key={`empty-${i}`} />;
-                const turnosDia = getTurnosDia(date);
-                const esLaborable = DIAS_LABORABLES.includes(date.getDay());
-                const ocupados = turnosDia.length;
-                const libres = MAX_TURNOS_POR_DIA - ocupados;
-                const esHoy = isToday(date);
-                const isSelected = selectedCalDay && isSameDay(date, selectedCalDay);
-                const lleno = ocupados >= MAX_TURNOS_POR_DIA;
-                const casiLleno = libres <= 2 && libres > 0;
-
-                let dotColor = "transparent";
-                if (esLaborable && ocupados > 0) dotColor = lleno ? "#e53e3e" : casiLleno ? "#f0a500" : "#27ae60";
-
-                return (
-                  <div key={date.toISOString()} onClick={()=>esLaborable && setSelectedCalDay(isSelected ? null : date)}
-                    style={{
-                      ...s.calCell,
-                      ...(esHoy ? s.calCellHoy : {}),
-                      ...(isSelected ? s.calCellSelected : {}),
-                      ...(!esLaborable ? s.calCellWeekend : {}),
-                      cursor: esLaborable ? "pointer" : "default",
-                    }}>
-                    <div style={s.calDayNum}>{date.getDate()}</div>
-                    {esLaborable && ocupados > 0 && (
-                      <div style={s.calBadgeWrap}>
-                        <div style={{ ...s.calBadge, background: dotColor }}>{ocupados}/{MAX_TURNOS_POR_DIA}</div>
-                      </div>
-                    )}
-                    {esLaborable && ocupados === 0 && (
-                      <div style={s.calLibre}>libre</div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Leyenda */}
-            <div style={s.calLegend}>
-              {[["#27ae60","Con turnos, cupo disponible"],["#f0a500","Casi completo (≤2 lugares)"],["#e53e3e","Completo"]].map(([c,l])=>(
-                <div key={l} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#7a6e5f"}}>
-                  <div style={{width:10,height:10,borderRadius:"50%",background:c,flexShrink:0}}/>
-                  {l}
-                </div>
-              ))}
-            </div>
-
-            {/* Panel del día seleccionado */}
-            {selectedCalDay && (
-              <div style={s.calDayPanel}>
-                <div style={s.calDayPanelHeader}>
-                  <div>
-                    <div style={s.calDayPanelTitle}>
-                      {selectedCalDay.toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"})}
-                    </div>
-                    <div style={s.calDayPanelSub}>
-                      {turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length} turno{turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length!==1?"s":""} activo{turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length!==1?"s":""} · {MAX_TURNOS_POR_DIA - turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length} lugar{MAX_TURNOS_POR_DIA - turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length!==1?"es":""} libre{MAX_TURNOS_POR_DIA - turnosDelDiaSeleccionado.filter(a=>a.status!=="cancelado").length!==1?"s":""}
-                    </div>
-                  </div>
-                  <button style={s.calNewBtn} onClick={()=>{
-                    const pad = n=>String(n).padStart(2,"0");
-                    const d = selectedCalDay;
-                    setSelected(null);
-                    setForm({name:"",email:"",phone:"",service:SERVICES[0],duration:60,date:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`,time:"",status:"confirmado"});
-                    setErrors({});
-                    setView("form");
-                  }}>+ Nuevo turno este día</button>
-                </div>
-
-                {turnosDelDiaSeleccionado.length === 0 ? (
-                  <div style={s.calEmpty}>🌿 Sin turnos para este día</div>
-                ) : (
-                  <div style={s.calDayList}>
-                    {turnosDelDiaSeleccionado.map(appt => {
-                      const sc = statusColors[appt.status]||statusColors.pendiente;
-                      return (
-                        <div key={appt.id} style={s.calApptRow}>
-                          <div style={s.calApptTime}>{formatTime(appt.date)}<div style={s.calApptDur}>{appt.duration}m</div></div>
-                          <div style={s.calApptInfo}>
-                            <div style={s.calApptName}>{appt.name}</div>
-                            <div style={s.calApptService}>{appt.service}{SERVICE_INFO[appt.service] ? " · " + formatPrecio(SERVICE_INFO[appt.service].precio) : ""}</div>
-                          </div>
-                          <span style={{...s.statusBadge,background:sc.bg,color:sc.text,fontSize:11}}>
-                            <span style={{...s.statusDot,background:sc.dot}}/>{appt.status}
-                          </span>
-                          <button style={s.actionBtn} onClick={()=>openEdit(appt)}>✏️</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ═══ VISTA CLIENTES ═══ */}
-        {view === "clients" && (() => {
-          // Consolidar clientes únicos por email
-          const clientMap = {};
-          appointments.forEach(a => {
-            const key = a.email.toLowerCase();
-            if (!clientMap[key]) {
-              clientMap[key] = { name: a.name, email: a.email, phone: a.phone, turnos: [], services: new Set() };
-            }
-            clientMap[key].turnos.push(a);
-            clientMap[key].services.add(a.service);
-          });
-
-          const clients = Object.values(clientMap).map(c => ({
-            ...c,
-            total: c.turnos.length,
-            activos: c.turnos.filter(t => t.status !== "cancelado").length,
-            ultimoTurno: c.turnos.sort((a,b) => b.date - a.date)[0].date,
-            services: [...c.services],
-          }));
-
-          const sorted = [...clients]
-            .filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()) || c.email.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone.includes(clientSearch))
-            .sort((a, b) => {
-              if (clientSort === "name") return a.name.localeCompare(b.name);
-              if (clientSort === "total") return b.total - a.total;
-              if (clientSort === "ultimo") return b.ultimoTurno - a.ultimoTurno;
-              return 0;
-            });
-
-          const exportCSV = () => {
-            const header = ["Nombre","Email","Teléfono","Total turnos","Turnos activos","Último turno","Servicios"];
-            const rows = sorted.map(c => [
-              c.name, c.email, c.phone, c.total, c.activos,
-              c.ultimoTurno.toLocaleDateString("es-AR"),
-              c.services.join(" / ")
-            ]);
-            const csv = [header, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
-            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a"); a.href = url; a.download = "clientes-serenitas.csv"; a.click();
-            URL.revokeObjectURL(url);
-          };
-
-          return (
-            <div>
-              {/* Header de clientes */}
-              <div style={s.clientsHeader}>
-                <div>
-                  <div style={s.clientsTitle}>👥 Clientes registrados</div>
-                  <div style={s.clientsSub}>{clients.length} cliente{clients.length !== 1 ? "s" : ""} únicos · {appointments.length} turno{appointments.length !== 1 ? "s" : ""} en total</div>
-                </div>
-                <button style={s.exportBtn} onClick={exportCSV}>⬇ Exportar CSV</button>
-              </div>
-
-              {/* Buscador y ordenamiento */}
-              <div style={{ display:"flex", gap:10, marginBottom:18, flexWrap:"wrap" }}>
-                <div style={{ ...s.searchWrap, marginBottom:0, flex:1, minWidth:200 }}>
-                  <span style={s.searchIcon}>🔍</span>
-                  <input style={s.searchInput} placeholder="Buscar por nombre, email o teléfono..." value={clientSearch} onChange={e=>setClientSearch(e.target.value)} />
-                </div>
-                <div style={{ display:"flex", gap:6 }}>
-                  {[["name","A–Z"],["total","Más turnos"],["ultimo","Último turno"]].map(([val,label]) => (
-                    <button key={val} style={{ ...s.sortBtn, ...(clientSort===val ? s.sortBtnActive : {}) }} onClick={()=>setClientSort(val)}>{label}</button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Stats rápidas */}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:20 }}>
-                {[
-                  { label:"Clientes únicos", value: clients.length, icon:"👤" },
-                  { label:"Recaudación total", value: formatPrecio(appointments.filter(a=>a.status!=="cancelado").reduce((acc,a)=>acc+(SERVICE_INFO[a.service]?.precio||0),0)), icon:"💰", small:true },
-                  { label:"Clientes recurrentes", value: clients.filter(c=>c.total>1).length, icon:"🔄" },
-                  { label:"Servicio más elegido", value: (() => { const cnt = {}; appointments.forEach(a=>{ cnt[a.service]=(cnt[a.service]||0)+1; }); return Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0]?.split(" ")[1] || "—"; })(), icon:"💆", small:true },
-                ].map(st => (
-                  <div key={st.label} style={s.statCard}>
-                    <div style={s.statIcon}>{st.icon}</div>
-                    <div style={{ ...s.statValue, fontSize: st.small ? 16 : 28 }}>{st.value}</div>
-                    <div style={s.statLabel}>{st.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Tabla */}
-              {sorted.length === 0 ? (
-                <div style={s.empty}><div style={{fontSize:48,marginBottom:12}}>👤</div><div style={{fontFamily:"Georgia,serif",fontSize:18,color:"#7a6e5f"}}>Sin clientes encontrados</div></div>
-              ) : (
-                <div style={s.clientTable}>
-                  <div style={s.clientTableHead}>
-                    <div style={{flex:2}}>Cliente</div>
-                    <div style={{flex:2}}>Contacto</div>
-                    <div style={{flex:2,fontSize:11}}>Servicios</div>
-                    <div style={{flex:"0 0 80px",textAlign:"center"}}>Turnos</div>
-                    <div style={{flex:"0 0 100px",textAlign:"right"}}>Acumulado</div>
-                    <div style={{flex:"0 0 110px",textAlign:"right"}}>Último turno</div>
-                  </div>
-                  {sorted.map((c, i) => (
-                    <div key={c.email} style={{ ...s.clientRow, ...(i%2===0?{}:{background:"rgba(240,232,219,0.3)"}) }}>
-                      <div style={{flex:2}}>
-                        <div style={s.clientName}>{c.name}</div>
-                        {c.total > 1 && <span style={s.recurrentBadge}>🔄 recurrente</span>}
-                      </div>
-                      <div style={{flex:2}}>
-                        <div style={s.clientContact}>📧 {c.email}</div>
-                        <div style={s.clientContact}>📞 {c.phone}</div>
-                      </div>
-                      <div style={{flex:2}}>
-                        {c.services.map(sv => <div key={sv} style={s.serviceTag}>{sv}</div>)}
-                      </div>
-                      <div style={{flex:"0 0 80px",textAlign:"center"}}>
-                        <div style={s.turnosNum}>{c.activos}</div>
-                        {c.activos !== c.total && <div style={{fontSize:10,color:"#9a8060"}}>{c.total} total</div>}
-                      </div>
-                      <div style={{flex:"0 0 100px",textAlign:"right"}}>
-                        <div style={{...s.clientContact, fontWeight:700, color:"#6b4226"}}>{formatPrecio(c.turnos.filter(t=>t.status!=="cancelado").reduce((acc,a)=>acc+(SERVICE_INFO[a.service]?.precio||0),0))}</div>
-                        <div style={{fontSize:10,color:"#9a8060"}}>acumulado</div>
-                      </div>
-                      <div style={{flex:"0 0 110px",textAlign:"right"}}>
-                        <div style={s.clientContact}>{c.ultimoTurno.toLocaleDateString("es-AR",{day:"2-digit",month:"short",year:"numeric"})}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
       </main>
     </div>
   );
 }
-
-const s = {
-  root: { minHeight:"100vh", background:"#faf6f0", fontFamily:"'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif", position:"relative", overflow:"hidden" },
-  bgTexture: { position:"fixed", inset:0, backgroundImage:"radial-gradient(ellipse at 20% 20%, #e8ddd0 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, #d4c9bc 0%, transparent 60%)", pointerEvents:"none", zIndex:0 },
-  header: { background:"linear-gradient(135deg,#3d2b1f 0%,#6b4226 100%)", boxShadow:"0 4px 24px rgba(61,43,31,0.25)", position:"relative", zIndex:10 },
-  headerInner: { maxWidth:900, margin:"0 auto", padding:"20px 24px", display:"flex", justifyContent:"space-between", alignItems:"center" },
-  logo: { color:"#f0d9b5", fontSize:26, fontWeight:700, letterSpacing:"0.18em" },
-  logoSub: { color:"#b89060", fontSize:11, letterSpacing:"0.2em", textTransform:"uppercase", marginTop:2 },
-  storageBadge: { background:"rgba(255,255,255,0.12)", color:"#a8e6b8", borderRadius:20, padding:"5px 12px", fontSize:11, letterSpacing:"0.06em", border:"1px solid rgba(168,230,184,0.3)" },
-  newBtn: { background:"linear-gradient(135deg,#c8873a,#a0622a)", color:"#fff9f0", border:"none", borderRadius:8, padding:"10px 20px", fontSize:14, fontFamily:"inherit", cursor:"pointer", display:"flex", alignItems:"center", gap:8, fontWeight:600, letterSpacing:"0.05em", boxShadow:"0 2px 12px rgba(168,90,36,0.35)" },
-  tabBar: { background:"rgba(255,252,245,0.95)", borderBottom:"1px solid rgba(168,130,90,0.2)", position:"relative", zIndex:9 },
-  tabInner: { maxWidth:900, margin:"0 auto", padding:"0 20px", display:"flex", gap:4 },
-  tab: { background:"transparent", border:"none", borderBottom:"3px solid transparent", padding:"14px 20px", fontSize:14, fontFamily:"inherit", cursor:"pointer", color:"#9a8060", fontWeight:600, letterSpacing:"0.04em", transition:"all 0.15s" },
-  tabActive: { color:"#3d2b1f", borderBottomColor:"#c8873a" },
-  toast: { position:"fixed", top:80, left:"50%", transform:"translateX(-50%)", background:"#27ae60", color:"#fff", borderRadius:8, padding:"12px 28px", fontSize:14, fontFamily:"inherit", zIndex:100, boxShadow:"0 4px 16px rgba(0,0,0,0.15)", letterSpacing:"0.03em", display:"flex", alignItems:"center", gap:8 },
-  main: { maxWidth:900, margin:"0 auto", padding:"28px 20px 60px", position:"relative", zIndex:1 },
-  statsRow: { display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:18 },
-  statCard: { background:"rgba(255,252,245,0.85)", borderRadius:14, padding:"18px 14px", textAlign:"center", boxShadow:"0 2px 12px rgba(100,70,40,0.1)", border:"1px solid rgba(168,130,90,0.15)" },
-  statIcon: { fontSize:22, marginBottom:6 },
-  statValue: { fontSize:28, fontWeight:700, color:"#3d2b1f", lineHeight:1 },
-  statLabel: { fontSize:11, color:"#9a8060", letterSpacing:"0.08em", textTransform:"uppercase", marginTop:4 },
-  alertaBanner: { background:"#fde8e8", border:"1.5px solid #e53e3e", borderRadius:10, padding:"12px 18px", fontSize:14, color:"#7a1a1a", marginBottom:14 },
-  filterBanner: { background:"#fef5dc", border:"1.5px solid #f0a500", borderRadius:10, padding:"10px 18px", fontSize:13, color:"#7a5a0a", marginBottom:14, display:"flex", alignItems:"center", justifyContent:"space-between" },
-  filterClear: { background:"transparent", border:"none", color:"#7a5a0a", cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:13 },
-  searchWrap: { display:"flex", alignItems:"center", background:"rgba(255,252,245,0.9)", borderRadius:12, border:"1px solid rgba(168,130,90,0.2)", padding:"10px 16px", marginBottom:18, boxShadow:"0 2px 8px rgba(100,70,40,0.06)" },
-  searchIcon: { fontSize:16, marginRight:10 },
-  searchInput: { flex:1, border:"none", background:"transparent", fontSize:15, color:"#3d2b1f", fontFamily:"inherit", outline:"none" },
-  clearBtn: { background:"rgba(229,62,62,0.08)", border:"1.5px solid rgba(229,62,62,0.25)", borderRadius:10, padding:"10px 16px", color:"#c0392b", fontSize:13, cursor:"pointer", fontFamily:"inherit", fontWeight:600, whiteSpace:"nowrap" },
-  list: { display:"flex", flexDirection:"column", gap:14 },
-  empty: { textAlign:"center", padding:"60px 20px", background:"rgba(255,252,245,0.7)", borderRadius:16, border:"2px dashed rgba(168,130,90,0.2)" },
-  card: { background:"rgba(255,252,245,0.92)", borderRadius:14, padding:"18px 20px", display:"flex", alignItems:"flex-start", gap:16, boxShadow:"0 2px 16px rgba(100,70,40,0.09)", border:"1px solid rgba(168,130,90,0.12)" },
-  cardHoy: { border:"2px solid #c8873a", boxShadow:"0 2px 20px rgba(200,135,58,0.18)" },
-  cardLeft: { minWidth:90 },
-  cardDate: { background:"linear-gradient(135deg,#3d2b1f,#6b4226)", borderRadius:10, padding:"10px 12px", textAlign:"center" },
-  cardDateHoy: { background:"linear-gradient(135deg,#a0622a,#c8873a)" },
-  cardHoyTag: { background:"rgba(255,255,255,0.2)", color:"#fff", fontSize:9, fontWeight:800, letterSpacing:"0.15em", borderRadius:4, padding:"2px 6px", marginBottom:4, display:"inline-block" },
-  cardDateDay: { color:"#f0d9b5", fontSize:11, letterSpacing:"0.08em", textTransform:"uppercase" },
-  cardDateTime: { color:"#fff", fontSize:20, fontWeight:700, marginTop:2, letterSpacing:"0.04em" },
-  cardBody: { flex:1 },
-  cardTop: { display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 },
-  cardName: { fontSize:17, fontWeight:700, color:"#2a1a0e" },
-  cardService: { fontSize:13, color:"#8a6a44", marginTop:2, fontStyle:"italic" },
-  statusBadge: { display:"inline-flex", alignItems:"center", gap:5, borderRadius:20, padding:"4px 12px", fontSize:12, fontWeight:600, letterSpacing:"0.04em" },
-  statusDot: { width:7, height:7, borderRadius:"50%", display:"inline-block" },
-  cardInfo: { display:"flex", flexWrap:"wrap", gap:8 },
-  infoChip: { background:"#f0e8db", borderRadius:20, padding:"4px 10px", fontSize:12, color:"#6b4a2a", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 },
-  editHint: { fontSize:11, opacity:0.6 },
-  durationEditor: { display:"flex", alignItems:"center", gap:6, marginTop:10, background:"#fef8f0", borderRadius:8, padding:"8px 12px", border:"1px solid #e0c8a8", flexWrap:"wrap" },
-  durBtn: { background:"#f0e8db", border:"1.5px solid transparent", borderRadius:6, padding:"4px 10px", fontSize:12, color:"#6b4a2a", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
-  durBtnActive: { background:"#3d2b1f", color:"#f0d9b5", border:"1.5px solid #3d2b1f" },
-  durCancel: { background:"transparent", border:"none", cursor:"pointer", color:"#9a7a5a", fontSize:14, padding:"2px 6px", fontFamily:"inherit" },
-  cardActions: { display:"flex", flexDirection:"column", gap:6 },
-  actionBtn: { background:"#f0e8db", border:"none", borderRadius:8, padding:"7px 10px", fontSize:15, cursor:"pointer" },
-  formWrap: { maxWidth:680, margin:"0 auto" },
-  formCard: { background:"rgba(255,252,245,0.96)", borderRadius:18, padding:"30px 32px", boxShadow:"0 8px 40px rgba(100,70,40,0.13)", border:"1px solid rgba(168,130,90,0.15)" },
-  formHeader: { display:"flex", alignItems:"center", gap:16, marginBottom:20 },
-  backBtn: { background:"transparent", border:"none", color:"#8a6a44", cursor:"pointer", fontSize:14, fontFamily:"inherit", padding:"6px 10px", borderRadius:6 },
-  formTitle: { margin:0, fontSize:22, color:"#2a1a0e", fontWeight:700 },
-  bizError: { background:"#fde8e8", border:"1.5px solid #e53e3e", borderRadius:10, padding:"12px 16px", fontSize:14, color:"#7a1a1a", marginBottom:20, lineHeight:1.5 },
-  formGrid: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 },
-  field: { display:"flex", flexDirection:"column", gap:6 },
-  label: { fontSize:12, color:"#7a5a3a", fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase" },
-  input: { background:"#fef8f0", border:"1.5px solid #e0c8a8", borderRadius:9, padding:"11px 14px", fontSize:15, color:"#2a1a0e", fontFamily:"inherit", outline:"none" },
-  inputError: { borderColor:"#e53e3e" },
-  errorMsg: { fontSize:11, color:"#e53e3e" },
-  durationPicker: { display:"flex", gap:8, flexWrap:"wrap" },
-  durPickerBtn: { background:"#f0e8db", border:"2px solid transparent", borderRadius:8, padding:"9px 18px", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:600, color:"#6b4a2a" },
-  durPickerActive: { background:"#3d2b1f", color:"#f0d9b5", border:"2px solid #3d2b1f" },
-  statusBtn: { display:"inline-flex", alignItems:"center", gap:6, border:"2px solid transparent", borderRadius:20, padding:"8px 16px", fontSize:13, cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
-  formFooter: { display:"flex", justifyContent:"flex-end", gap:12, marginTop:28, paddingTop:20, borderTop:"1px solid #ecdcc8" },
-  cancelBtn: { background:"transparent", border:"1.5px solid #d0b890", borderRadius:9, padding:"11px 22px", color:"#8a6a44", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
-  submitBtn: { background:"linear-gradient(135deg,#3d2b1f,#6b4226)", border:"none", borderRadius:9, padding:"11px 28px", color:"#f0d9b5", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 3px 12px rgba(61,43,31,0.3)" },
-  // Calendario
-  calWrap: { maxWidth:860, margin:"0 auto" },
-  calHeader: { display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 },
-  calTitle: { fontSize:22, fontWeight:700, color:"#2a1a0e", letterSpacing:"0.04em" },
-  calNavBtn: { background:"rgba(255,252,245,0.9)", border:"1.5px solid #e0c8a8", borderRadius:8, width:38, height:38, fontSize:20, cursor:"pointer", color:"#6b4226", display:"flex", alignItems:"center", justifyContent:"center" },
-  calGrid: { display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:6, marginBottom:16 },
-  calDayHeader: { textAlign:"center", fontSize:12, fontWeight:700, color:"#9a8060", letterSpacing:"0.08em", textTransform:"uppercase", padding:"8px 0" },
-  calCell: { background:"rgba(255,252,245,0.85)", borderRadius:10, padding:"10px 8px", minHeight:70, border:"1.5px solid rgba(168,130,90,0.12)", display:"flex", flexDirection:"column", alignItems:"center", gap:4, transition:"all 0.15s" },
-  calCellHoy: { border:"2px solid #c8873a", background:"rgba(200,135,58,0.08)" },
-  calCellSelected: { border:"2px solid #3d2b1f", background:"rgba(61,43,31,0.06)", boxShadow:"0 2px 12px rgba(61,43,31,0.12)" },
-  calCellWeekend: { background:"rgba(200,190,180,0.2)", opacity:0.5 },
-  calDayNum: { fontSize:16, fontWeight:700, color:"#2a1a0e" },
-  calBadgeWrap: { width:"100%" , display:"flex", justifyContent:"center" },
-  calBadge: { borderRadius:10, padding:"2px 8px", fontSize:11, fontWeight:700, color:"#fff" },
-  calLibre: { fontSize:10, color:"#9a8060", letterSpacing:"0.06em" },
-  calLegend: { display:"flex", gap:20, flexWrap:"wrap", marginBottom:20, padding:"12px 16px", background:"rgba(255,252,245,0.8)", borderRadius:10, border:"1px solid rgba(168,130,90,0.15)" },
-  calDayPanel: { background:"rgba(255,252,245,0.96)", borderRadius:16, padding:"24px", boxShadow:"0 4px 24px rgba(100,70,40,0.1)", border:"1px solid rgba(168,130,90,0.18)" },
-  calDayPanelHeader: { display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:18, flexWrap:"wrap", gap:12 },
-  calDayPanelTitle: { fontSize:18, fontWeight:700, color:"#2a1a0e", textTransform:"capitalize" },
-  calDayPanelSub: { fontSize:13, color:"#8a6a44", marginTop:4 },
-  calNewBtn: { background:"linear-gradient(135deg,#3d2b1f,#6b4226)", color:"#f0d9b5", border:"none", borderRadius:8, padding:"9px 18px", fontSize:13, fontFamily:"inherit", cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" },
-  calEmpty: { textAlign:"center", padding:"32px", color:"#9a8060", fontSize:16, fontFamily:"Georgia,serif" },
-  calDayList: { display:"flex", flexDirection:"column", gap:10 },
-  calApptRow: { display:"flex", alignItems:"center", gap:12, background:"#fef8f0", borderRadius:10, padding:"12px 14px", border:"1px solid #ecdcc8" },
-  calApptTime: { textAlign:"center", minWidth:44 },
-  calApptDur: { fontSize:11, color:"#9a8060", marginTop:2 },
-  calApptInfo: { flex:1 },
-  calApptName: { fontWeight:700, color:"#2a1a0e", fontSize:15 },
-  calApptService: { fontSize:12, color:"#8a6a44", fontStyle:"italic", marginTop:2 },
-  setupCard: { background:"rgba(255,252,245,0.96)", borderRadius:18, padding:"40px 36px", maxWidth:680, margin:"0 auto", boxShadow:"0 8px 40px rgba(100,70,40,0.13)", border:"1px solid rgba(168,130,90,0.15)", textAlign:"center" },
-  setupTitle: { fontSize:24, color:"#2a1a0e", margin:"0 0 12px", fontWeight:700 },
-  setupText: { color:"#6b4a2a", fontSize:15, lineHeight:1.6, marginBottom:24 },
-  setupSteps: { textAlign:"left", background:"#fef8f0", borderRadius:12, padding:"20px 24px", marginBottom:24, border:"1px solid #e0c8a8" },
-  step: { display:"flex", alignItems:"flex-start", gap:12, marginBottom:12, fontSize:14, color:"#4a3020", lineHeight:1.5 },
-  stepNum: { background:"#3d2b1f", color:"#f0d9b5", borderRadius:"50%", width:24, height:24, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0 },
-  sqlBlock: { background:"#1e1410", borderRadius:12, padding:"20px", textAlign:"left" },
-  sqlTitle: { color:"#f0d9b5", fontSize:13, marginBottom:12 },
-  sqlCode: { color:"#c8a870", fontSize:12, fontFamily:"monospace", margin:0, whiteSpace:"pre-wrap", lineHeight:1.7 },
-  code: { background:"#f0e8db", borderRadius:4, padding:"1px 6px", fontSize:13, color:"#6b4226", fontFamily:"monospace" },
-  // Clientes
-  clientsHeader: { display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 },
-  clientsTitle: { fontSize:22, fontWeight:700, color:"#2a1a0e" },
-  clientsSub: { fontSize:13, color:"#8a6a44", marginTop:4 },
-  exportBtn: { background:"linear-gradient(135deg,#3d2b1f,#6b4226)", color:"#f0d9b5", border:"none", borderRadius:8, padding:"10px 18px", fontSize:13, fontFamily:"inherit", cursor:"pointer", fontWeight:600, display:"flex", alignItems:"center", gap:6 },
-  sortBtn: { background:"rgba(255,252,245,0.9)", border:"1.5px solid #e0c8a8", borderRadius:8, padding:"9px 14px", fontSize:12, fontFamily:"inherit", cursor:"pointer", color:"#6b4a2a", fontWeight:600 },
-  sortBtnActive: { background:"#3d2b1f", color:"#f0d9b5", borderColor:"#3d2b1f" },
-  clientTable: { background:"rgba(255,252,245,0.95)", borderRadius:14, overflow:"hidden", boxShadow:"0 2px 16px rgba(100,70,40,0.09)", border:"1px solid rgba(168,130,90,0.15)" },
-  clientTableHead: { display:"flex", gap:12, padding:"12px 18px", background:"linear-gradient(135deg,#3d2b1f,#6b4226)", color:"#f0d9b5", fontSize:11, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase" },
-  clientRow: { display:"flex", gap:12, padding:"14px 18px", borderBottom:"1px solid rgba(168,130,90,0.1)", alignItems:"flex-start" },
-  clientName: { fontWeight:700, color:"#2a1a0e", fontSize:15 },
-  recurrentBadge: { fontSize:10, background:"#d4f4e7", color:"#1a7a4a", borderRadius:10, padding:"2px 8px", fontWeight:600 },
-  clientContact: { fontSize:12, color:"#6b4a2a", marginTop:2 },
-  serviceTag: { fontSize:11, color:"#8a6a44", fontStyle:"italic", marginTop:2 },
-  turnosNum: { fontSize:22, fontWeight:700, color:"#3d2b1f" },
-
-};
