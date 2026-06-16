@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { supabase, getRol } from "../lib/supabase";
 
 const s = {
@@ -21,10 +22,20 @@ export default function Header({ user, onNuevoTurno }) {
   const nombre = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Usuario";
   const avatar = user?.user_metadata?.avatar_url;
 
+  // 1. Detector dinámico de pantalla móvil
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 650);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 650);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
 
+  // 2. Configuración visual según los 3 roles (Admin, Recepcionista, Cliente)
   let badgeBg = "rgba(168,230,184,0.15)";
   let badgeColor = "#a8e6b8";
   let rolText = "📋 Recepcionista";
@@ -41,13 +52,25 @@ export default function Header({ user, onNuevoTurno }) {
 
   return (
     <header style={s.header}>
-      <div style={s.inner}>
+      <div style={{ 
+        ...s.inner, 
+        flexDirection: isMobile ? "column" : "row", // Se apila en celulares
+        textAlign: isMobile ? "center" : "left",
+        gap: isMobile ? 16 : 0
+      }}>
         <div>
           <div style={s.logo}>✦ AURA MASAJES</div>
           <div style={s.logoSub}>Sistema de Turnos</div>
         </div>
-        <div style={s.right}>
-          <div style={s.userInfo}>
+        
+        <div style={{ 
+          ...s.right, 
+          flexDirection: isMobile ? "column" : "row", // Los botones bajan
+          width: isMobile ? "100%" : "auto",
+          justifyContent: isMobile ? "center" : "flex-end",
+          gap: 12
+        }}>
+          <div style={{ ...s.userInfo, textAlign: isMobile ? "center" : "right" }}>
             <div style={s.userName}>{nombre}</div>
             <div style={s.userEmail}>
               <span style={{ ...s.rolBadge, background: badgeBg, color: badgeColor }}>
@@ -55,14 +78,25 @@ export default function Header({ user, onNuevoTurno }) {
               </span>
             </div>
           </div>
+          
           {avatar
             ? <img src={avatar} alt={nombre} style={s.avatar} />
             : <div style={s.avatarFallback}>{nombre[0].toUpperCase()}</div>
           }
-          <button style={s.newBtn} onClick={onNuevoTurno}>
+          
+          <button 
+            style={{ ...s.newBtn, width: isMobile ? "100%" : "auto", justifyContent: "center" }} 
+            onClick={onNuevoTurno}
+          >
             <span style={{fontSize:16}}>+</span> {rol === "cliente" ? "Reservar Turno" : "Nuevo Turno"}
           </button>
-          <button style={s.logoutBtn} onClick={handleLogout}>Salir</button>
+          
+          <button 
+            style={{ ...s.logoutBtn, width: isMobile ? "100%" : "auto" }} 
+            onClick={handleLogout}
+          >
+            Salir
+          </button>
         </div>
       </div>
     </header>

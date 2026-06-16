@@ -1,5 +1,5 @@
+import { useState, useEffect } from "react";
 import { isToday, formatDate, formatTime, formatPrecio, SERVICE_INFO, DURATIONS, MAX_TURNOS_POR_DIA } from "../hooks/useTurnos";
-import React from "react";
 
 const statusColors = {
   confirmado: { bg:"#d4f4e7", text:"#1a7a4a", dot:"#27ae60" },
@@ -8,7 +8,7 @@ const statusColors = {
 };
 
 const s = {
-  statsRow: { display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:18 },
+  statsRow: { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))", gap:14, marginBottom:18 },
   statCard: { background:"rgba(255,252,245,0.85)", borderRadius:14, padding:"18px 14px", textAlign:"center", boxShadow:"0 2px 12px rgba(100,70,40,0.1)", border:"1px solid rgba(168,130,90,0.15)" },
   statIcon: { fontSize:22, marginBottom:6 },
   statValue: { fontSize:28, fontWeight:700, color:"#3d2b1f", lineHeight:1 },
@@ -17,21 +17,21 @@ const s = {
   alertaBanner: { background:"#fde8e8", border:"1.5px solid #e53e3e", borderRadius:10, padding:"12px 18px", fontSize:14, color:"#7a1a1a", marginBottom:14 },
   filterBanner: { background:"#fef5dc", border:"1.5px solid #f0a500", borderRadius:10, padding:"10px 18px", fontSize:13, color:"#7a5a0a", marginBottom:14, display:"flex", alignItems:"center", justifyContent:"space-between" },
   filterClear: { background:"transparent", border:"none", color:"#7a5a0a", cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:13 },
-  searchRow: { display:"flex", gap:10, marginBottom:18 },
-  searchWrap: { display:"flex", alignItems:"center", flex:1, background:"rgba(255,252,245,0.9)", borderRadius:12, border:"1px solid rgba(168,130,90,0.2)", padding:"10px 16px", boxShadow:"0 2px 8px rgba(100,70,40,0.06)" },
+  searchRow: { display:"flex", gap:10, marginBottom:18, flexWrap:"wrap" },
+  searchWrap: { display:"flex", alignItems:"center", flex:1, minWidth:250, background:"rgba(255,252,245,0.9)", borderRadius:12, border:"1px solid rgba(168,130,90,0.2)", padding:"10px 16px", boxShadow:"0 2px 8px rgba(100,70,40,0.06)" },
   searchInput: { flex:1, border:"none", background:"transparent", fontSize:15, color:"#3d2b1f", fontFamily:"inherit", outline:"none" },
   clearBtn: { background:"rgba(229,62,62,0.08)", border:"1.5px solid rgba(229,62,62,0.25)", borderRadius:10, padding:"10px 16px", color:"#c0392b", fontSize:13, cursor:"pointer", fontFamily:"inherit", fontWeight:600, whiteSpace:"nowrap" },
   list: { display:"flex", flexDirection:"column", gap:14 },
   empty: { textAlign:"center", padding:"60px 20px", background:"rgba(255,252,245,0.7)", borderRadius:16, border:"2px dashed rgba(168,130,90,0.2)" },
-  card: { background:"rgba(255,252,245,0.92)", borderRadius:14, padding:"18px 20px", display:"flex", alignItems:"flex-start", gap:16, boxShadow:"0 2px 16px rgba(100,70,40,0.09)", border:"1px solid rgba(168,130,90,0.12)" },
+  card: { background:"rgba(255,252,245,0.92)", borderRadius:14, padding:"18px 20px", display:"flex", gap:16, boxShadow:"0 2px 16px rgba(100,70,40,0.09)", border:"1px solid rgba(168,130,90,0.12)" },
   cardHoy: { border:"2px solid #c8873a", boxShadow:"0 2px 20px rgba(200,135,58,0.18)" },
   cardDateBox: { background:"linear-gradient(135deg,#3d2b1f,#6b4226)", borderRadius:10, padding:"10px 12px", textAlign:"center", minWidth:85 },
   cardDateBoxHoy: { background:"linear-gradient(135deg,#a0622a,#c8873a)" },
-  hoyTag: { background:"rgba(255,255,255,0.2)", color:"#fff", fontSize:9, fontWeight:800, letterSpacing:"0.15em", borderRadius:4, padding:"2px 6px", marginBottom:4, display:"inline-block" },
+  hoyTag: { background:"rgba(255,255,255,0.2)", color:"#fff", fontSize:9, fontWeight:800, letterSpacing:"0.15em", borderRadius:4, padding:"2px 6px", display:"inline-block" },
   cardDateDay: { color:"#f0d9b5", fontSize:11, letterSpacing:"0.08em", textTransform:"uppercase" },
-  cardDateTime: { color:"#fff", fontSize:20, fontWeight:700, marginTop:2 },
+  cardDateTime: { color:"#fff", fontSize:20, fontWeight:700 },
   cardBody: { flex:1 },
-  cardTop: { display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 },
+  cardTop: { display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, flexWrap:"wrap", gap:10 },
   cardName: { fontSize:17, fontWeight:700, color:"#2a1a0e" },
   cardService: { fontSize:13, color:"#8a6a44", marginTop:2, fontStyle:"italic" },
   statusBadge: { display:"inline-flex", alignItems:"center", gap:5, borderRadius:20, padding:"4px 12px", fontSize:12, fontWeight:600 },
@@ -44,11 +44,21 @@ const s = {
   durBtn: { background:"#f0e8db", border:"1.5px solid transparent", borderRadius:6, padding:"4px 10px", fontSize:12, color:"#6b4a2a", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
   durBtnActive: { background:"#3d2b1f", color:"#f0d9b5", border:"1.5px solid #3d2b1f" },
   durCancel: { background:"transparent", border:"none", cursor:"pointer", color:"#9a7a5a", fontSize:14, padding:"2px 6px", fontFamily:"inherit" },
-  actions: { display:"flex", flexDirection:"column", gap:6 },
-  actionBtn: { background:"#f0e8db", border:"none", borderRadius:8, padding:"7px 10px", fontSize:15, cursor:"pointer" },
+  actions: { display:"flex", gap:8 },
+  actionBtn: { background:"#f0e8db", border:"none", borderRadius:8, padding:"8px 12px", fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontWeight:600, color:"#3d2b1f" },
 };
 
 export default function TurnosList({ appointments, loading, rol, search, setSearch, filterHoy, setFilterHoy, onEdit, onDelete, onUpdateDuration, onClearAll, user }) {
+  // ESCUCHA DE PANTALLA EN TIEMPO REAL
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 650);
+  const [editingDur, setEditingDur] = useState(null);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 650);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const turnosHoyGlobales = appointments.filter(a => isToday(a.date) && a.status !== "cancelado");
   const cupoLibre = MAX_TURNOS_POR_DIA - turnosHoyGlobales.length;
 
@@ -64,8 +74,6 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
       return ms && (!filterHoy || isToday(a.date));
     })
     .sort((a,b) => a.date - b.date);
-
-  const [editingDur, setEditingDur] = React.useState(null);
 
   const handleDurChange = async (id, dur) => {
     const err = await onUpdateDuration(id, dur);
@@ -111,16 +119,35 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
         {!loading && filtered.length === 0 && (
           <div style={s.empty}><div style={{ fontSize: 48, marginBottom: 12 }}>🌿</div><div style={{ fontFamily: "Georgia,serif", fontSize: 18, color: "#7a6e5f" }}>{filterHoy ? "No hay turnos para hoy" : "No hay turnos registrados"}</div></div>
         )}
+        
         {!loading && filtered.map(appt => {
           const sc = statusColors[appt.status] || statusColors.pendiente;
           const esHoy = isToday(appt.date);
+          
           return (
-            <div key={appt.id} style={{ ...s.card, ...(esHoy ? s.cardHoy : {}) }}>
-              <div style={{ ...s.cardDateBox, ...(esHoy ? s.cardDateBoxHoy : {}) }}>
-                {esHoy && <div style={s.hoyTag}>HOY</div>}
-                <div style={s.cardDateDay}>{formatDate(appt.date)}</div>
-                <div style={s.cardDateTime}>{formatTime(appt.date)}</div>
+            <div key={appt.id} style={{ 
+              ...s.card, 
+              ...(esHoy ? s.cardHoy : {}),
+              flexDirection: isMobile ? "column" : "row", // Adaptación Responsive Principal
+              alignItems: isMobile ? "stretch" : "flex-start" 
+            }}>
+              
+              {/* CAJA DE FECHA ADAPTATIVA */}
+              <div style={{ 
+                ...s.cardDateBox, 
+                ...(esHoy ? s.cardDateBoxHoy : {}),
+                display: isMobile ? "flex" : "block", // En celular se vuelve horizontal
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: isMobile ? "12px 16px" : "10px 12px"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {esHoy && <div style={{ ...s.hoyTag, marginBottom: isMobile ? 0 : 4 }}>HOY</div>}
+                  <div style={s.cardDateDay}>{formatDate(appt.date)}</div>
+                </div>
+                <div style={{ ...s.cardDateTime, marginTop: isMobile ? 0 : 2 }}>{formatTime(appt.date)}</div>
               </div>
+              
               <div style={s.cardBody}>
                 <div style={s.cardTop}>
                   <div>
@@ -149,10 +176,31 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
                   </div>
                 )}
               </div>
-              <div style={s.actions}>
-                <button style={s.actionBtn} onClick={() => onEdit(appt)}>✏️</button>
-                {rol === "admin" && <button style={{ ...s.actionBtn, color: "#e53e3e" }} onClick={() => onDelete(appt.id)}>🗑</button>}
+              
+              {/* BOTONES DE ACCIÓN ADAPTATIVOS */}
+              <div style={{ 
+                ...s.actions, 
+                flexDirection: isMobile ? "row" : "column", // En celular se ponen lado a lado
+                marginTop: isMobile ? 8 : 0,
+                borderTop: isMobile ? "1px solid rgba(168,130,90,0.15)" : "none",
+                paddingTop: isMobile ? 16 : 0
+              }}>
+                <button 
+                  style={{ ...s.actionBtn, flex: isMobile ? 1 : "none" }} 
+                  onClick={() => onEdit(appt)}
+                >
+                  ✏️ {isMobile ? "Editar" : ""}
+                </button>
+                {rol === "admin" && (
+                  <button 
+                    style={{ ...s.actionBtn, color: "#e53e3e", flex: isMobile ? 1 : "none" }} 
+                    onClick={() => onDelete(appt.id)}
+                  >
+                    🗑 {isMobile ? "Eliminar" : ""}
+                  </button>
+                )}
               </div>
+              
             </div>
           );
         })}
