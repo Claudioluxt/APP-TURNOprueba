@@ -15,7 +15,7 @@ export const ADMIN_EMAILS = [
 ];
 
 export const RECEPCIONISTA_EMAILS = [
-  "recepcion@email.com", 
+  "Jimenaleguizamon91@gmail.com", 
 ];
 
 export const getRol = (email) => {
