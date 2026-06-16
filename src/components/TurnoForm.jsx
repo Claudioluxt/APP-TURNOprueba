@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { SERVICES, SERVICE_INFO, DURATIONS, DIAS_LABORABLES } from "../hooks/useTurnos";
+import { SERVICES, SERVICE_INFO, DURATIONS, DIAS_LABORABLES, formatPrecio } from "../hooks/useTurnos";
 
 const s = {
   wrap: { maxWidth:680, margin:"0 auto" },
@@ -12,6 +12,7 @@ const s = {
   field: { display:"flex", flexDirection:"column", gap:6 },
   label: { fontSize:12, color:"#7a5a3a", fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase" },
   input: { background:"#fef8f0", border:"1.5px solid #e0c8a8", borderRadius:9, padding:"11px 14px", fontSize:15, color:"#2a1a0e", fontFamily:"inherit", outline:"none" },
+  inputDisabled: { background: "#ebdcc8", color: "#6b5a44", cursor: "not-allowed" },
   inputError: { borderColor:"#e53e3e" },
   errorMsg: { fontSize:11, color:"#e53e3e" },
   warnMsg: { fontSize:11, color:"#e07a00" },
@@ -35,7 +36,7 @@ const statusColors = {
 
 const emptyForm = { name:"", email:"", phone:"", service:SERVICES[0], duration:SERVICE_INFO[SERVICES[0]].duracion, date:"", time:"", status:"confirmado" };
 
-export default function TurnoForm({ selected, onBack, onSave }) {
+export default function TurnoForm({ selected, onBack, onSave, prefillDate, user, rol }) {
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -51,10 +52,16 @@ export default function TurnoForm({ selected, onBack, onSave }) {
         time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
       });
     } else {
-      setForm(emptyForm);
+      setForm({
+        ...emptyForm,
+        name: rol === "cliente" ? (user?.user_metadata?.full_name || "") : "",
+        email: rol === "cliente" ? (user?.email || "") : "",
+        status: rol === "cliente" ? "pendiente" : "confirmado",
+        date: prefillDate || "",
+      });
     }
     setErrors({});
-  }, [selected]);
+  }, [selected, prefillDate, user, rol]);
 
   const validate = () => {
     const e = {};
@@ -90,15 +97,17 @@ export default function TurnoForm({ selected, onBack, onSave }) {
         <div style={s.grid}>
           <div style={s.field}>
             <label style={s.label}>Nombre *</label>
-            <input style={{...s.input,...(errors.name?s.inputError:{})}} placeholder="Ej: María González"
-              value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
+            <input style={{...s.input,...(errors.name?s.inputError:{}), ...(rol =="cliente"?s.inputDisabled:{})}} 
+              placeholder="Ej: María González" value={form.name} disabled={rol === "cliente"}
+              onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
             {errors.name && <span style={s.errorMsg}>{errors.name}</span>}
           </div>
 
           <div style={s.field}>
             <label style={s.label}>Correo *</label>
-            <input style={{...s.input,...(errors.email?s.inputError:{})}} placeholder="cliente@email.com"
-              value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}/>
+            <input style={{...s.input,...(errors.email?s.inputError:{}), ...(rol ==="cliente"?s.inputDisabled:{})}} 
+              placeholder="cliente@email.com" value={form.email} disabled={rol === "cliente"}
+              onChange={e=>setForm(f=>({...f,email:e.target.value}))}/>
             {errors.email && <span style={s.errorMsg}>{errors.email}</span>}
           </div>
 
@@ -115,7 +124,7 @@ export default function TurnoForm({ selected, onBack, onSave }) {
               const svc = e.target.value;
               setForm(f=>({...f, service:svc, duration: SERVICE_INFO[svc]?.duracion || f.duration}));
             }}>
-              {SERVICES.map(sv=><option key={sv} value={sv}>{sv} — ${SERVICE_INFO[sv].precio.toLocaleString("es-AR")}</option>)}
+              {SERVICES.map(sv=><option key={sv} value={sv}>{sv} — {formatPrecio(SERVICE_INFO[sv].precio)}</option>)}
             </select>
             <span style={s.priceHint}>⏱ Duración sugerida: {SERVICE_INFO[form.service]?.duracion} min</span>
           </div>
@@ -140,31 +149,33 @@ export default function TurnoForm({ selected, onBack, onSave }) {
             <div style={s.durationPicker}>
               {DURATIONS.map(d=>(
                 <button key={d} style={{...s.durBtn,...(form.duration===d?s.durBtnActive:{})}}
-                  onClick={()=>setForm(f=>({...f,duration:d}))}>{d} min</button>
+                  disabled={rol === "cliente"} onClick={()=>setForm(f=>({...f,duration:d}))}>{d} min</button>
               ))}
             </div>
           </div>
 
-          <div style={{...s.field, gridColumn:"1 / -1"}}>
-            <label style={s.label}>Estado</label>
-            <div style={s.statusRow}>
-              {["confirmado","pendiente","cancelado"].map(st=>{
-                const sc = statusColors[st];
-                return (
-                  <button key={st} style={{...s.statusBtn, background:form.status===st?sc.bg:"#f5f0eb", color:form.status===st?sc.text:"#9a8e7f", borderColor:form.status===st?sc.dot:"transparent"}}
-                    onClick={()=>setForm(f=>({...f,status:st}))}>
-                    <span style={{...s.statusDot, background:sc.dot}}/>{st}
-                  </button>
-                );
-              })}
+          {rol !== "cliente" && (
+            <div style={{...s.field, gridColumn:"1 / -1"}}>
+              <label style={s.label}>Estado</label>
+              <div style={s.statusRow}>
+                {["confirmado","pendiente","cancelado"].map(st=>{
+                  const sc = statusColors[st];
+                  return (
+                    <button key={st} style={{...s.statusBtn, background:form.status===st?sc.bg:"#f5f0eb", color:form.status===st?sc.text:"#9a8e7f", borderColor:form.status===st?sc.dot:"transparent"}}
+                      onClick={()=>setForm(f=>({...f,status:st}))}>
+                      <span style={{...s.statusDot, background:sc.dot}}/>{st}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div style={s.footer}>
           <button style={s.cancelBtn} onClick={onBack}>Cancelar</button>
           <button style={s.submitBtn} onClick={handleSubmit} disabled={saving}>
-            {saving ? "Guardando..." : selected ? "Guardar Cambios" : "Registrar Turno"}
+            {saving ? "Guardando..." : selected ? "Guardar Cambios" : "Solicitar Reserva"}
           </button>
         </div>
       </div>

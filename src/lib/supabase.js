@@ -9,11 +9,18 @@ export const isConfigured =
   !SUPABASE_URL.includes("TU_PROJECT_ID") &&
   !SUPABASE_ANON_KEY.includes("TU_PUBLISHABLE_KEY");
 
-// ─── ROLES ───────────────────────────────────
-// Agregá acá el email de la cuenta Google del Admin
+/// ─── CONFIGURACIÓN DE TRES ROLES ────────────────
 export const ADMIN_EMAILS = [
   "luxengabriel@gmail.com",
 ];
 
-export const getRol = (email) =>
-  ADMIN_EMAILS.includes(email?.toLowerCase()) ? "admin" : "user";
+export const RECEPCIONISTA_EMAILS = [
+  "recepcion@email.com", 
+];
+
+export const getRol = (email) => {
+  const mail = email?.toLowerCase();
+  if (ADMIN_EMAILS.includes(mail)) return "admin";
+  if (RECEPCIONISTA_EMAILS.includes(mail)) return "recepcionista";
+  return "cliente";
+};

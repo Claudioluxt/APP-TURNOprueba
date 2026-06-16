@@ -25,16 +25,18 @@ export default function Header({ user, onNuevoTurno }) {
     await supabase.auth.signOut();
   };
 
-  // Definir color y texto de la etiqueta según el rol
-  let badgeStyle = { background: "rgba(200,200,200,0.15)", color: "#a0a0a0" };
-  let rolText = "👤 Cliente";
+  let badgeBg = "rgba(168,230,184,0.15)";
+  let badgeColor = "#a8e6b8";
+  let rolText = "📋 Recepcionista";
 
   if (rol === "admin") {
-    badgeStyle = { background: "rgba(200,135,58,0.25)", color: "#f0d9b5" };
+    badgeBg = "rgba(200,135,58,0.25)";
+    badgeColor = "#f0d9b5";
     rolText = "👑 Admin";
-  } else if (rol === "recepcionista") {
-    badgeStyle = { background: "rgba(168,230,184,0.15)", color: "#a8e6b8" };
-    rolText = "📋 Recepcionista";
+  } else if (rol === "cliente") {
+    badgeBg = "rgba(52,152,219,0.15)";
+    badgeColor = "#3498db";
+    rolText = "👤 Cliente";
   }
 
   return (
@@ -48,21 +50,18 @@ export default function Header({ user, onNuevoTurno }) {
           <div style={s.userInfo}>
             <div style={s.userName}>{nombre}</div>
             <div style={s.userEmail}>
-              <span style={{ ...s.rolBadge, ...badgeStyle }}>{rolText}</span>
+              <span style={{ ...s.rolBadge, background: badgeBg, color: badgeColor }}>
+                {rolText}
+              </span>
             </div>
           </div>
           {avatar
             ? <img src={avatar} alt={nombre} style={s.avatar} />
             : <div style={s.avatarFallback}>{nombre[0].toUpperCase()}</div>
           }
-          
-          {/* Ocultamos el botón de nuevo turno administrativo si es cliente */}
-          {rol !== "cliente" && (
-            <button style={s.newBtn} onClick={onNuevoTurno}>
-              <span style={{fontSize:16}}>+</span> Nuevo Turno
-            </button>
-          )}
-
+          <button style={s.newBtn} onClick={onNuevoTurno}>
+            <span style={{fontSize:16}}>+</span> {rol === "cliente" ? "Reservar Turno" : "Nuevo Turno"}
+          </button>
           <button style={s.logoutBtn} onClick={handleLogout}>Salir</button>
         </div>
       </div>

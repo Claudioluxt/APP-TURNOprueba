@@ -53,17 +53,14 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 1. Mostrar portal público si entran por el link de reserva
   if (esPortalPublico()) return <PortalCliente />;
 
-  // 2. Pantalla de carga mientras se verifica la sesión
   if (authLoading) return (
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(160deg,#2a1a0e,#6b4226)" }}>
       <div style={{ color:"#f0d9b5", fontSize:28, fontFamily:"Georgia,serif", letterSpacing:"0.1em" }}>✦ AURA MASAJES</div>
     </div>
   );
 
-  // 3. Pantalla de Login si no hay nadie conectado
   if (!user) return <Login />;
 
   if (!isConfigured) return (
@@ -76,22 +73,7 @@ export default function App() {
     </div>
   );
 
-  // 4. AHORA SÍ: El usuario está logueado correctamente, verificamos su rol
   const rol = getRol(user?.email);
-
-  // ─── BLOQUEO EXCLUSIVO PARA CLIENTES ───
-  if (rol === "cliente") {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-        <Header user={user} onNuevoTurno={() => {}} />
-        <div style={{ flex: 1, position: "relative", zIndex: 1 }}>
-          <PortalCliente />
-        </div>
-      </div>
-    );
-  }
-  // ─────────────────────────────────────────
-
   const showToast = (msg) => { setToast(msg); setTimeout(()=>setToast(""),3500); };
 
   const handleSave = async (form, selectedId) => {
@@ -132,7 +114,7 @@ export default function App() {
   const handleEdit = (appt) => { setSelected(appt); setView("form"); };
 
   const tabs = [
-    { id:"list",     label:"📋 Turnos" },
+    { id:"list",     label: rol === "cliente" ? "📋 Mis Turnos" : "📋 Turnos" },
     { id:"calendar", label:"📅 Calendario" },
     ...(rol==="admin" ? [{ id:"clients", label:"👥 Clientes" }] : []),
   ];
@@ -164,20 +146,20 @@ export default function App() {
 
       <main style={s.main}>
         {view==="list" && (
-          <TurnosList appointments={appointments} loading={loading} rol={rol}
+          <TurnosList appointments={appointments} loading={loading} rol={rol} user={user}
             search={search} setSearch={setSearch}
             filterHoy={filterHoy} setFilterHoy={setFilterHoy}
             onEdit={handleEdit} onDelete={handleDelete}
             onUpdateDuration={handleUpdateDuration} onClearAll={handleClearAll}/>
         )}
         {view==="form" && (
-          <TurnoForm selected={selected?._prefillDate?null:selected}
+          <TurnoForm selected={selected?._prefillDate?null:selected} user={user} rol={rol}
             prefillDate={selected?._prefillDate}
             onBack={()=>{ setView("list"); setSelected(null); }}
             onSave={handleSave}/>
         )}
         {view==="calendar" && (
-          <Calendario appointments={appointments} onEdit={handleEdit} onNewForDay={handleNewForDay}/>
+          <Calendario appointments={appointments} user={user} rol={rol} onEdit={handleEdit} onNewForDay={handleNewForDay}/>
         )}
         {view==="clients" && rol==="admin" && (
           <Clientes appointments={appointments} search={clientSearch} setSearch={setClientSearch} sort={clientSort} setSort={setClientSort}/>

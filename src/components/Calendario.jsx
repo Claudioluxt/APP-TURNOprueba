@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { isToday, isSameDay, formatTime, formatPrecio, SERVICE_INFO, MAX_TURNOS_POR_DIA, SERVICES } from "../hooks/useTurnos";
+import { isToday, isSameDay, formatTime, formatPrecio, SERVICE_INFO, MAX_TURNOS_POR_DIA } from "../hooks/useTurnos";
 
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DIAS_CORTOS = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
@@ -52,7 +52,7 @@ const s = {
   actionBtn: { background:"#f0e8db", border:"none", borderRadius:8, padding:"7px 10px", fontSize:15, cursor:"pointer" },
 };
 
-export default function Calendario({ appointments, onEdit, onNewForDay }) {
+export default function Calendario({ appointments, onEdit, onNewForDay, user, rol }) {
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState(null);
@@ -63,16 +63,21 @@ export default function Calendario({ appointments, onEdit, onNewForDay }) {
     setCalMonth(m); setCalYear(y); setSelectedDay(null);
   };
 
+  // Los globitos del calendario se cuentan globales para saber la ocupación real de los cupos
   const getTurnosDia = (date) => date
     ? appointments.filter(a => isSameDay(a.date, date) && a.status !== "cancelado")
     : [];
 
+  // El panel lateral visual filtra los datos personales si es cliente
   const turnosDiaSeleccionado = selectedDay
-    ? appointments.filter(a => isSameDay(a.date, selectedDay)).sort((a,b)=>a.date-b.date)
+    ? appointments
+        .filter(a => isSameDay(a.date, selectedDay))
+        .filter(a => rol === "cliente" ? a.email.toLowerCase() === user?.email?.toLowerCase() : true)
+        .sort((a,b)=>a.date-b.date)
     : [];
 
-  const activos = turnosDiaSeleccionado.filter(a => a.status !== "cancelado").length;
-  const libres = MAX_TURNOS_POR_DIA - activos;
+  const activosGlobales = selectedDay ? appointments.filter(a => isSameDay(a.date, selectedDay) && a.status !== "cancelado").length : 0;
+  const libres = MAX_TURNOS_POR_DIA - activosGlobales;
 
   return (
     <>
@@ -121,7 +126,7 @@ export default function Calendario({ appointments, onEdit, onNewForDay }) {
           <div style={s.panelHeader}>
             <div>
               <div style={s.panelTitle}>{selectedDay.toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"})}</div>
-              <div style={s.panelSub}>{activos} turno{activos!==1?"s":""} activo{activos!==1?"s":""} · {libres} lugar{libres!==1?"es":""} libre{libres!==1?"s":""}</div>
+              <div style={s.panelSub}>{turnosDiaSeleccionado.length} turno(s) visible(s) · {libres} lugar(es) libre(s)</div>
             </div>
             <button style={s.newBtn} onClick={()=>onNewForDay(selectedDay)}>+ Nuevo turno este día</button>
           </div>

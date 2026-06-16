@@ -1,4 +1,5 @@
 import { isToday, formatDate, formatTime, formatPrecio, SERVICE_INFO, DURATIONS, MAX_TURNOS_POR_DIA } from "../hooks/useTurnos";
+import React from "react";
 
 const statusColors = {
   confirmado: { bg:"#d4f4e7", text:"#1a7a4a", dot:"#27ae60" },
@@ -47,11 +48,17 @@ const s = {
   actionBtn: { background:"#f0e8db", border:"none", borderRadius:8, padding:"7px 10px", fontSize:15, cursor:"pointer" },
 };
 
-export default function TurnosList({ appointments, loading, rol, search, setSearch, filterHoy, setFilterHoy, onEdit, onDelete, onUpdateDuration, onClearAll }) {
-  const turnosHoy = appointments.filter(a => isToday(a.date) && a.status !== "cancelado");
-  const cupoLibre = MAX_TURNOS_POR_DIA - turnosHoy.length;
+export default function TurnosList({ appointments, loading, rol, search, setSearch, filterHoy, setFilterHoy, onEdit, onDelete, onUpdateDuration, onClearAll, user }) {
+  const turnosHoyGlobales = appointments.filter(a => isToday(a.date) && a.status !== "cancelado");
+  const cupoLibre = MAX_TURNOS_POR_DIA - turnosHoyGlobales.length;
 
-  const filtered = appointments
+  const misTurnos = rol === "cliente"
+    ? appointments.filter(a => a.email.toLowerCase() === user?.email?.toLowerCase())
+    : appointments;
+
+  const turnosHoyVisibles = misTurnos.filter(a => isToday(a.date) && a.status !== "cancelado");
+
+  const filtered = misTurnos
     .filter(a => {
       const ms = a.name.toLowerCase().includes(search.toLowerCase()) || a.service.toLowerCase().includes(search.toLowerCase());
       return ms && (!filterHoy || isToday(a.date));
@@ -69,47 +76,47 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
     <>
       <div style={s.statsRow}>
         {[
-          { label:"Total Turnos", value:appointments.length, icon:"📋" },
-          { label:"Confirmados", value:appointments.filter(a=>a.status==="confirmado").length, icon:"✅" },
-          { label:"Pendientes", value:appointments.filter(a=>a.status==="pendiente").length, icon:"⏳" },
-          { label:"Turnos Hoy", value:turnosHoy.length, icon:"📅",
-            sub:`${cupoLibre} lugar${cupoLibre!==1?"es":""} libre${cupoLibre!==1?"s":""}`,
-            subColor: cupoLibre===0?"#e53e3e":cupoLibre<=2?"#f0a500":"#27ae60", clickable:true },
-        ].map(st=>(
-          <div key={st.label} style={{...s.statCard, cursor:st.clickable?"pointer":"default", outline:st.clickable&&filterHoy?"2px solid #c8873a":"none"}}
-            onClick={()=>st.clickable&&setFilterHoy(f=>!f)}>
+          { label: rol === "cliente" ? "Mis Turnos" : "Total Turnos", value: misTurnos.length, icon: "📋" },
+          { label: "Confirmados", value: misTurnos.filter(a => a.status === "confirmado").length, icon: "✅" },
+          { label: "Pendientes", value: misTurnos.filter(a => a.status === "pendiente").length, icon: "⏳" },
+          { label: rol === "cliente" ? "Mis Turnos Hoy" : "Turnos Hoy", value: turnosHoyVisibles.length, icon: "📅",
+            sub: `${cupoLibre} lugar${cupoLibre !== 1 ? "es" : ""} libre${cupoLibre !== 1 ? "s" : ""}`,
+            subColor: cupoLibre === 0 ? "#e53e3e" : cupoLibre <= 2 ? "#f0a500" : "#27ae60", clickable: true },
+        ].map(st => (
+          <div key={st.label} style={{ ...s.statCard, cursor: st.clickable ? "pointer" : "default", outline: st.clickable && filterHoy ? "2px solid #c8873a" : "none" }}
+            onClick={() => st.clickable && setFilterHoy(f => !f)}>
             <div style={s.statIcon}>{st.icon}</div>
             <div style={s.statValue}>{st.value}</div>
             <div style={s.statLabel}>{st.label}</div>
-            {st.sub && <div style={{...s.statSub, color:st.subColor}}>{st.sub}</div>}
+            {st.sub && <div style={{ ...s.statSub, color: st.subColor }}>{st.sub}</div>}
           </div>
         ))}
       </div>
 
-      {cupoLibre===0 && <div style={s.alertaBanner}>⚠️ <strong>Agenda completa para hoy</strong> — Límite de {MAX_TURNOS_POR_DIA} turnos alcanzado.</div>}
-      {filterHoy && <div style={s.filterBanner}>📅 Mostrando solo turnos de hoy <button style={s.filterClear} onClick={()=>setFilterHoy(false)}>✕ Ver todos</button></div>}
+      {cupoLibre === 0 && <div style={s.alertaBanner}>⚠️ <strong>Agenda completa para hoy</strong> — Límite de {MAX_TURNOS_POR_DIA} turnos alcanzado.</div>}
+      {filterHoy && <div style={s.filterBanner}>📅 Mostrando solo turnos de hoy <button style={s.filterClear} onClick={() => setFilterHoy(false)}>✕ Ver todos</button></div>}
 
       <div style={s.searchRow}>
         <div style={s.searchWrap}>
-          <span style={{fontSize:16, marginRight:10}}>🔍</span>
-          <input style={s.searchInput} placeholder="Buscar por nombre o servicio..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          <span style={{ fontSize: 16, marginRight: 10 }}>🔍</span>
+          <input style={s.searchInput} placeholder="Buscar por nombre o servicio..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        {rol==="admin" && appointments.length>0 && (
+        {rol === "admin" && appointments.length > 0 && (
           <button style={s.clearBtn} onClick={onClearAll}>🗑 Limpiar todo</button>
         )}
       </div>
 
       <div style={s.list}>
-        {loading && <div style={s.empty}><div style={{fontSize:36,marginBottom:10}}>⏳</div><div style={{color:"#7a6e5f"}}>Cargando turnos...</div></div>}
-        {!loading && filtered.length===0 && (
-          <div style={s.empty}><div style={{fontSize:48,marginBottom:12}}>🌿</div><div style={{fontFamily:"Georgia,serif",fontSize:18,color:"#7a6e5f"}}>{filterHoy?"No hay turnos para hoy":"No hay turnos registrados"}</div></div>
+        {loading && <div style={s.empty}><div style={{ fontSize: 36, marginBottom: 10 }}>⏳</div><div style={{ color: "#7a6e5f" }}>Cargando turnos...</div></div>}
+        {!loading && filtered.length === 0 && (
+          <div style={s.empty}><div style={{ fontSize: 48, marginBottom: 12 }}>🌿</div><div style={{ fontFamily: "Georgia,serif", fontSize: 18, color: "#7a6e5f" }}>{filterHoy ? "No hay turnos para hoy" : "No hay turnos registrados"}</div></div>
         )}
-        {!loading && filtered.map(appt=>{
-          const sc = statusColors[appt.status]||statusColors.pendiente;
+        {!loading && filtered.map(appt => {
+          const sc = statusColors[appt.status] || statusColors.pendiente;
           const esHoy = isToday(appt.date);
           return (
-            <div key={appt.id} style={{...s.card,...(esHoy?s.cardHoy:{})}}>
-              <div style={{...s.cardDateBox,...(esHoy?s.cardDateBoxHoy:{})}}>
+            <div key={appt.id} style={{ ...s.card, ...(esHoy ? s.cardHoy : {}) }}>
+              <div style={{ ...s.cardDateBox, ...(esHoy ? s.cardDateBoxHoy : {}) }}>
                 {esHoy && <div style={s.hoyTag}>HOY</div>}
                 <div style={s.cardDateDay}>{formatDate(appt.date)}</div>
                 <div style={s.cardDateTime}>{formatTime(appt.date)}</div>
@@ -120,31 +127,31 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
                     <div style={s.cardName}>{appt.name}</div>
                     <div style={s.cardService}>{appt.service}</div>
                   </div>
-                  <span style={{...s.statusBadge,background:sc.bg,color:sc.text}}>
-                    <span style={{...s.statusDot,background:sc.dot}}/>{appt.status}
+                  <span style={{ ...s.statusBadge, background: sc.bg, color: sc.text }}>
+                    <span style={{ ...s.statusDot, background: sc.dot }} />{appt.status}
                   </span>
                 </div>
                 <div style={s.chips}>
                   <span style={s.chip}>📧 {appt.email}</span>
                   <span style={s.chip}>📞 {appt.phone}</span>
-                  <span style={{...s.chip,...s.chipClickable}} onClick={()=>setEditingDur(editingDur===appt.id?null:appt.id)}>
-                    ⏱ {appt.duration} min <span style={s.editHint}>✏️</span>
+                  <span style={{ ...s.chip, ...(rol !== "cliente" ? s.chipClickable : {}) }} onClick={() => rol !== "cliente" && setEditingDur(editingDur === appt.id ? null : appt.id)}>
+                    ⏱ {appt.duration} min {rol !== "cliente" && <span style={s.editHint}>✏️</span>}
                   </span>
                   {SERVICE_INFO[appt.service] && <span style={s.chip}>💰 {formatPrecio(SERVICE_INFO[appt.service].precio)}</span>}
                 </div>
-                {editingDur===appt.id && (
+                {editingDur === appt.id && (
                   <div style={s.durEditor}>
-                    <span style={{fontSize:13,color:"#7a6e5f",marginRight:8}}>Cambiar duración:</span>
-                    {DURATIONS.map(d=>(
-                      <button key={d} style={{...s.durBtn,...(appt.duration===d?s.durBtnActive:{})}} onClick={()=>handleDurChange(appt.id,d)}>{d}m</button>
+                    <span style={{ fontSize: 13, color: "#7a6e5f", marginRight: 8 }}>Cambiar duración:</span>
+                    {DURATIONS.map(d => (
+                      <button key={d} style={{ ...s.durBtn, ...(appt.duration === d ? s.durBtnActive : {}) }} onClick={() => handleDurChange(appt.id, d)}>{d}m</button>
                     ))}
-                    <button style={s.durCancel} onClick={()=>setEditingDur(null)}>✕</button>
+                    <button style={s.durCancel} onClick={() => setEditingDur(null)}>✕</button>
                   </div>
                 )}
               </div>
               <div style={s.actions}>
-                <button style={s.actionBtn} onClick={()=>onEdit(appt)}>✏️</button>
-                {rol==="admin" && <button style={{...s.actionBtn,color:"#e53e3e"}} onClick={()=>onDelete(appt.id)}>🗑</button>}
+                <button style={s.actionBtn} onClick={() => onEdit(appt)}>✏️</button>
+                {rol === "admin" && <button style={{ ...s.actionBtn, color: "#e53e3e" }} onClick={() => onDelete(appt.id)}>🗑</button>}
               </div>
             </div>
           );
@@ -153,6 +160,3 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
     </>
   );
 }
-
-// Need React import for useState
-import React from "react";
