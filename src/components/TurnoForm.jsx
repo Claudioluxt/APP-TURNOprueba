@@ -2,29 +2,29 @@ import { useState, useEffect } from "react";
 import { SERVICES, SERVICE_INFO, DURATIONS, DIAS_LABORABLES, formatPrecio } from "../hooks/useTurnos";
 
 const s = {
-  wrap: { maxWidth:680, margin:"0 auto" },
-  card: { background:"rgba(255,252,245,0.96)", borderRadius:18, padding:"30px 32px", boxShadow:"0 8px 40px rgba(100,70,40,0.13)", border:"1px solid rgba(168,130,90,0.15)" },
-  header: { display:"flex", alignItems:"center", gap:16, marginBottom:20 },
+  wrap: { maxWidth:680, margin:"0 auto", padding: "0 10px" },
+  card: { background:"rgba(255,252,245,0.96)", borderRadius:18, boxShadow:"0 8px 40px rgba(100,70,40,0.13)", border:"1px solid rgba(168,130,90,0.15)" },
+  header: { display:"flex", alignItems:"center", gap:16, marginBottom:20, flexWrap: "wrap" },
   backBtn: { background:"transparent", border:"none", color:"#8a6a44", cursor:"pointer", fontSize:14, fontFamily:"inherit", padding:"6px 10px", borderRadius:6 },
   title: { margin:0, fontSize:22, color:"#2a1a0e", fontWeight:700 },
   bizError: { background:"#fde8e8", border:"1.5px solid #e53e3e", borderRadius:10, padding:"12px 16px", fontSize:14, color:"#7a1a1a", marginBottom:20, lineHeight:1.5 },
-  grid: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 },
+  grid: { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:18 },
   field: { display:"flex", flexDirection:"column", gap:6 },
   label: { fontSize:12, color:"#7a5a3a", fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase" },
-  input: { background:"#fef8f0", border:"1.5px solid #e0c8a8", borderRadius:9, padding:"11px 14px", fontSize:15, color:"#2a1a0e", fontFamily:"inherit", outline:"none" },
+  input: { background:"#fef8f0", border:"1.5px solid #e0c8a8", borderRadius:9, padding:"11px 14px", fontSize:15, color:"#2a1a0e", fontFamily:"inherit", outline:"none", width: "100%", boxSizing: "border-box" },
   inputDisabled: { background: "#ebdcc8", color: "#6b5a44", cursor: "not-allowed" },
   inputError: { borderColor:"#e53e3e" },
   errorMsg: { fontSize:11, color:"#e53e3e" },
   warnMsg: { fontSize:11, color:"#e07a00" },
   durationPicker: { display:"flex", gap:8, flexWrap:"wrap" },
-  durBtn: { background:"#f0e8db", border:"2px solid transparent", borderRadius:8, padding:"9px 18px", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:600, color:"#6b4a2a" },
+  durBtn: { background:"#f0e8db", border:"2px solid transparent", borderRadius:8, padding:"9px 18px", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:600, color:"#6b4a2a", flex: "1 1 auto", textAlign: "center" },
   durBtnActive: { background:"#3d2b1f", color:"#f0d9b5", border:"2px solid #3d2b1f" },
-  statusRow: { display:"flex", gap:10 },
-  statusBtn: { display:"inline-flex", alignItems:"center", gap:6, border:"2px solid transparent", borderRadius:20, padding:"8px 16px", fontSize:13, cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
+  statusRow: { display:"flex", gap:10, flexWrap: "wrap" },
+  statusBtn: { display:"inline-flex", alignItems:"center", gap:6, border:"2px solid transparent", borderRadius:20, padding:"8px 16px", fontSize:13, cursor:"pointer", fontFamily:"inherit", fontWeight:600, flex: "1 1 auto", justifyContent: "center" },
   statusDot: { width:7, height:7, borderRadius:"50%", display:"inline-block" },
-  footer: { display:"flex", justifyContent:"flex-end", gap:12, marginTop:28, paddingTop:20, borderTop:"1px solid #ecdcc8" },
-  cancelBtn: { background:"transparent", border:"1.5px solid #d0b890", borderRadius:9, padding:"11px 22px", color:"#8a6a44", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
-  submitBtn: { background:"linear-gradient(135deg,#3d2b1f,#6b4226)", border:"none", borderRadius:9, padding:"11px 28px", color:"#f0d9b5", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 3px 12px rgba(61,43,31,0.3)" },
+  footer: { display:"flex", justifyContent:"flex-end", gap:12, marginTop:28, paddingTop:20, borderTop:"1px solid #ecdcc8", flexWrap: "wrap" },
+  cancelBtn: { background:"transparent", border:"1.5px solid #d0b890", borderRadius:9, padding:"11px 22px", color:"#8a6a44", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:600, flex: "1 1 auto" },
+  submitBtn: { background:"linear-gradient(135deg,#3d2b1f,#6b4226)", border:"none", borderRadius:9, padding:"11px 28px", color:"#f0d9b5", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 3px 12px rgba(61,43,31,0.3)", flex: "2 1 auto" },
   priceHint: { fontSize:12, color:"#8a6a44", fontStyle:"italic", marginTop:2 },
 };
 
@@ -40,6 +40,13 @@ export default function TurnoForm({ selected, onBack, onSave, prefillDate, user,
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 650);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 650);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     if (selected) {
@@ -86,9 +93,9 @@ export default function TurnoForm({ selected, onBack, onSave, prefillDate, user,
 
   return (
     <div style={s.wrap}>
-      <div style={s.card}>
+      <div style={{ ...s.card, padding: isMobile ? "20px 16px" : "30px 32px" }}>
         <div style={s.header}>
-          <button style={s.backBtn} onClick={onBack}>← Volver</button>
+          <button type="button" style={s.backBtn} onClick={onBack}>← Volver</button>
           <h2 style={s.title}>{selected ? "Editar Turno" : "Nuevo Turno"}</h2>
         </div>
 
@@ -96,31 +103,31 @@ export default function TurnoForm({ selected, onBack, onSave, prefillDate, user,
 
         <div style={s.grid}>
           <div style={s.field}>
-            <label style={s.label}>Nombre *</label>
-            <input style={{...s.input,...(errors.name?s.inputError:{}), ...(rol =="cliente"?s.inputDisabled:{})}} 
+            <label htmlFor="name" style={s.label}>Nombre *</label>
+            <input id="name" name="name" style={{...s.input,...(errors.name?s.inputError:{}), ...(rol === "cliente"?s.inputDisabled:{})}} 
               placeholder="Ej: María González" value={form.name} disabled={rol === "cliente"}
               onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
             {errors.name && <span style={s.errorMsg}>{errors.name}</span>}
           </div>
 
           <div style={s.field}>
-            <label style={s.label}>Correo *</label>
-            <input style={{...s.input,...(errors.email?s.inputError:{}), ...(rol ==="cliente"?s.inputDisabled:{})}} 
+            <label htmlFor="email" style={s.label}>Correo *</label>
+            <input id="email" name="email" type="email" style={{...s.input,...(errors.email?s.inputError:{}), ...(rol === "cliente"?s.inputDisabled:{})}} 
               placeholder="cliente@email.com" value={form.email} disabled={rol === "cliente"}
               onChange={e=>setForm(f=>({...f,email:e.target.value}))}/>
             {errors.email && <span style={s.errorMsg}>{errors.email}</span>}
           </div>
 
           <div style={s.field}>
-            <label style={s.label}>Teléfono *</label>
-            <input style={{...s.input,...(errors.phone?s.inputError:{})}} placeholder="+54 11 1234-5678"
+            <label htmlFor="phone" style={s.label}>Teléfono *</label>
+            <input id="phone" name="phone" type="tel" style={{...s.input,...(errors.phone?s.inputError:{})}} placeholder="+54 11 1234-5678"
               value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))}/>
             {errors.phone && <span style={s.errorMsg}>{errors.phone}</span>}
           </div>
 
           <div style={s.field}>
-            <label style={s.label}>Servicio</label>
-            <select style={s.input} value={form.service} onChange={e=>{
+            <label htmlFor="service" style={s.label}>Servicio</label>
+            <select id="service" name="service" style={s.input} value={form.service} onChange={e=>{
               const svc = e.target.value;
               setForm(f=>({...f, service:svc, duration: SERVICE_INFO[svc]?.duracion || f.duration}));
             }}>
@@ -130,16 +137,16 @@ export default function TurnoForm({ selected, onBack, onSave, prefillDate, user,
           </div>
 
           <div style={s.field}>
-            <label style={s.label}>Fecha *</label>
-            <input type="date" style={{...s.input,...(errors.date?s.inputError:{})}}
+            <label htmlFor="date" style={s.label}>Fecha *</label>
+            <input id="date" name="date" type="date" style={{...s.input,...(errors.date?s.inputError:{})}}
               value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
             {errors.date && <span style={s.errorMsg}>{errors.date}</span>}
             {esFinDeSemana && <span style={s.warnMsg}>⚠️ Fin de semana — no se trabaja</span>}
           </div>
 
           <div style={s.field}>
-            <label style={s.label}>Hora *</label>
-            <input type="time" style={{...s.input,...(errors.time?s.inputError:{})}}
+            <label htmlFor="time" style={s.label}>Hora *</label>
+            <input id="time" name="time" type="time" style={{...s.input,...(errors.time?s.inputError:{})}}
               value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))}/>
             {errors.time && <span style={s.errorMsg}>{errors.time}</span>}
           </div>
@@ -148,7 +155,7 @@ export default function TurnoForm({ selected, onBack, onSave, prefillDate, user,
             <label style={s.label}>Duración del Turno</label>
             <div style={s.durationPicker}>
               {DURATIONS.map(d=>(
-                <button key={d} style={{...s.durBtn,...(form.duration===d?s.durBtnActive:{})}}
+                <button key={d} type="button" style={{...s.durBtn,...(form.duration===d?s.durBtnActive:{})}}
                   disabled={rol === "cliente"} onClick={()=>setForm(f=>({...f,duration:d}))}>{d} min</button>
               ))}
             </div>
@@ -161,7 +168,7 @@ export default function TurnoForm({ selected, onBack, onSave, prefillDate, user,
                 {["confirmado","pendiente","cancelado"].map(st=>{
                   const sc = statusColors[st];
                   return (
-                    <button key={st} style={{...s.statusBtn, background:form.status===st?sc.bg:"#f5f0eb", color:form.status===st?sc.text:"#9a8e7f", borderColor:form.status===st?sc.dot:"transparent"}}
+                    <button key={st} type="button" style={{...s.statusBtn, background:form.status===st?sc.bg:"#f5f0eb", color:form.status===st?sc.text:"#9a8e7f", borderColor:form.status===st?sc.dot:"transparent"}}
                       onClick={()=>setForm(f=>({...f,status:st}))}>
                       <span style={{...s.statusDot, background:sc.dot}}/>{st}
                     </button>
@@ -173,8 +180,8 @@ export default function TurnoForm({ selected, onBack, onSave, prefillDate, user,
         </div>
 
         <div style={s.footer}>
-          <button style={s.cancelBtn} onClick={onBack}>Cancelar</button>
-          <button style={s.submitBtn} onClick={handleSubmit} disabled={saving}>
+          <button type="button" style={s.cancelBtn} onClick={onBack}>Cancelar</button>
+          <button type="button" style={s.submitBtn} onClick={handleSubmit} disabled={saving}>
             {saving ? "Guardando..." : selected ? "Guardar Cambios" : "Solicitar Reserva"}
           </button>
         </div>

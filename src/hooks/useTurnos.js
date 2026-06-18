@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
-export const MAX_TURNOS_POR_DIA = 8;
+export const MAX_TURNOS_POR_DIA = 7;
 export const DIAS_LABORABLES = [1, 2, 3, 4, 5];
 export const DIAS_NOMBRES = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
 
@@ -15,15 +15,15 @@ export const SERVICES = [
 ];
 
 export const SERVICE_INFO = {
-  "Masaje Intensivo":                  { duracion: 45,  precio: 30000 },
-  "Ritual Aura":                       { duracion: 120, precio: 47000 },
-  "Craneofacial":                      { duracion: 45,  precio: 29000 },
-  "Descontracturante Cuerpo Completo": { duracion: 60,  precio: 33000 },
-  "Aura Integral":                     { duracion: 60,  precio: 35000 },
-  "Masaje Deportivo":                  { duracion: 70,  precio: 37000 },
+  "Masaje Intensivo":                  { duracion: 120,   precio: 30000 },
+  "Ritual Aura":                       { duracion: 120,  precio: 47000 },
+  "Craneofacial":                      { duracion: 120,   precio: 29000 },
+  "Descontracturante Cuerpo Completo": { duracion: 120,   precio: 33000 },
+  "Aura Integral":                     { duracion: 120,   precio: 35000 },
+  "Masaje Deportivo":                  { duracion: 120,  precio: 37000 },
 };
 
-export const DURATIONS = [30, 45, 60, 70, 90, 120];
+export const DURATIONS = [ 90, 120];
 
 export const formatTime  = (d) => d.toLocaleTimeString("es-AR", { hour:"2-digit", minute:"2-digit" });
 export const formatDate  = (d) => d.toLocaleDateString("es-AR", { weekday:"short", day:"2-digit", month:"short" });

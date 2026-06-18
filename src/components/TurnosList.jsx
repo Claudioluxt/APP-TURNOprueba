@@ -49,7 +49,6 @@ const s = {
 };
 
 export default function TurnosList({ appointments, loading, rol, search, setSearch, filterHoy, setFilterHoy, onEdit, onDelete, onUpdateDuration, onClearAll, user }) {
-  // ESCUCHA DE PANTALLA EN TIEMPO REAL
   const [isMobile, setIsMobile] = useState(window.innerWidth < 650);
   const [editingDur, setEditingDur] = useState(null);
 
@@ -107,7 +106,7 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
       <div style={s.searchRow}>
         <div style={s.searchWrap}>
           <span style={{ fontSize: 16, marginRight: 10 }}>🔍</span>
-          <input style={s.searchInput} placeholder="Buscar por nombre o servicio..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input id="search-turnos" name="search-turnos" style={s.searchInput} placeholder="Buscar por nombre o servicio..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         {rol === "admin" && appointments.length > 0 && (
           <button style={s.clearBtn} onClick={onClearAll}>🗑 Limpiar todo</button>
@@ -128,15 +127,14 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
             <div key={appt.id} style={{ 
               ...s.card, 
               ...(esHoy ? s.cardHoy : {}),
-              flexDirection: isMobile ? "column" : "row", // Adaptación Responsive Principal
+              flexDirection: isMobile ? "column" : "row",
               alignItems: isMobile ? "stretch" : "flex-start" 
             }}>
               
-              {/* CAJA DE FECHA ADAPTATIVA */}
               <div style={{ 
                 ...s.cardDateBox, 
                 ...(esHoy ? s.cardDateBoxHoy : {}),
-                display: isMobile ? "flex" : "block", // En celular se vuelve horizontal
+                display: isMobile ? "flex" : "block",
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: isMobile ? "12px 16px" : "10px 12px"
@@ -170,17 +168,16 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
                   <div style={s.durEditor}>
                     <span style={{ fontSize: 13, color: "#7a6e5f", marginRight: 8 }}>Cambiar duración:</span>
                     {DURATIONS.map(d => (
-                      <button key={d} style={{ ...s.durBtn, ...(appt.duration === d ? s.durBtnActive : {}) }} onClick={() => handleDurChange(appt.id, d)}>{d}m</button>
+                      <button key={d} type="button" style={{ ...s.durBtn, ...(appt.duration === d ? s.durBtnActive : {}) }} onClick={() => handleDurChange(appt.id, d)}>{d}m</button>
                     ))}
-                    <button style={s.durCancel} onClick={() => setEditingDur(null)}>✕</button>
+                    <button type="button" style={s.durCancel} onClick={() => setEditingDur(null)}>✕</button>
                   </div>
                 )}
               </div>
               
-              {/* BOTONES DE ACCIÓN ADAPTATIVOS */}
               <div style={{ 
                 ...s.actions, 
-                flexDirection: isMobile ? "row" : "column", // En celular se ponen lado a lado
+                flexDirection: isMobile ? "row" : "column",
                 marginTop: isMobile ? 8 : 0,
                 borderTop: isMobile ? "1px solid rgba(168,130,90,0.15)" : "none",
                 paddingTop: isMobile ? 16 : 0

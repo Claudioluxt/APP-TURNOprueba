@@ -40,7 +40,7 @@ export default function Login() {
       <div style={s.card}>
         <div style={s.logo}>✦ AURA MASAJES</div>
         <div style={s.sub}>Sistema de Turnos</div>
-        <div style={s.title}>Bienvenida 💆</div>
+        <div style={s.title}>Bienvenido/a 💆</div>
         <div style={s.desc}>Iniciá sesión para acceder al panel de gestión de turnos.</div>
         <button style={s.btn} onClick={handleGoogle}>
           <GoogleIcon />

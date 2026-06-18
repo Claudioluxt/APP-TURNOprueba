@@ -15,7 +15,7 @@ const s = {
   tabBar: { background:"rgba(255,252,245,0.95)", borderBottom:"1px solid rgba(168,130,90,0.2)", position:"relative", zIndex:9 },
   tabInner: { maxWidth:900, margin:"0 auto", padding:"0 20px", display:"flex", gap:4 },
   tab: { background:"transparent", border:"none", borderBottom:"3px solid transparent", padding:"14px 20px", fontSize:14, fontFamily:"inherit", cursor:"pointer", color:"#9a8060", fontWeight:600, letterSpacing:"0.04em" },
-  tabActive: { color:"#3d2b1f", borderBottomColor:"#c8873a" },
+  tabActive: { color:"#3d2b1f", borderBottom:"3px solid #c8873a" },
   toast: { position:"fixed", top:16, left:"50%", transform:"translateX(-50%)", background:"#27ae60", color:"#fff", borderRadius:8, padding:"12px 28px", fontSize:14, fontFamily:"inherit", zIndex:100, boxShadow:"0 4px 16px rgba(0,0,0,0.15)", display:"flex", alignItems:"center", gap:8 },
   main: { maxWidth:900, margin:"0 auto", padding:"28px 20px 60px", position:"relative", zIndex:1 },
   noAccess: { textAlign:"center", padding:"80px 20px" },
