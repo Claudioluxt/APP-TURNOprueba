@@ -9,46 +9,47 @@ const statusColors = {
 
 const s = {
   statsRow: { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))", gap:14, marginBottom:18 },
-  statCard: { background:"rgba(255,252,245,0.85)", borderRadius:14, padding:"18px 14px", textAlign:"center", boxShadow:"0 2px 12px rgba(100,70,40,0.1)", border:"1px solid rgba(168,130,90,0.15)" },
+  statCard: { background:"rgba(255,255,255,0.9)", borderRadius:14, padding:"18px 14px", textAlign:"center", boxShadow:"0 2px 12px rgba(44,62,50,0.08)", border:"1px solid rgba(212,175,55,0.2)" },
   statIcon: { fontSize:22, marginBottom:6 },
-  statValue: { fontSize:28, fontWeight:700, color:"#3d2b1f", lineHeight:1 },
-  statLabel: { fontSize:11, color:"#9a8060", letterSpacing:"0.08em", textTransform:"uppercase", marginTop:4 },
+  statValue: { fontSize:28, fontWeight:700, color:"#1a251d", lineHeight:1 },
+  statLabel: { fontSize:11, color:"#5a6e5a", letterSpacing:"0.08em", textTransform:"uppercase", marginTop:4 },
   statSub: { fontSize:10, fontWeight:700, marginTop:2 },
   alertaBanner: { background:"#fde8e8", border:"1.5px solid #e53e3e", borderRadius:10, padding:"12px 18px", fontSize:14, color:"#7a1a1a", marginBottom:14 },
   filterBanner: { background:"#fef5dc", border:"1.5px solid #f0a500", borderRadius:10, padding:"10px 18px", fontSize:13, color:"#7a5a0a", marginBottom:14, display:"flex", alignItems:"center", justifyContent:"space-between" },
   filterClear: { background:"transparent", border:"none", color:"#7a5a0a", cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:13 },
   searchRow: { display:"flex", gap:10, marginBottom:18, flexWrap:"wrap" },
-  searchWrap: { display:"flex", alignItems:"center", flex:1, minWidth:250, background:"rgba(255,252,245,0.9)", borderRadius:12, border:"1px solid rgba(168,130,90,0.2)", padding:"10px 16px", boxShadow:"0 2px 8px rgba(100,70,40,0.06)" },
-  searchInput: { flex:1, border:"none", background:"transparent", fontSize:15, color:"#3d2b1f", fontFamily:"inherit", outline:"none" },
+  searchWrap: { display:"flex", alignItems:"center", flex:1, minWidth:250, background:"rgba(255,255,255,0.9)", borderRadius:12, border:"1px solid rgba(212,175,55,0.3)", padding:"10px 16px", boxShadow:"0 2px 8px rgba(44,62,50,0.06)" },
+  searchInput: { flex:1, border:"none", background:"transparent", fontSize:15, color:"#1a251d", fontFamily:"inherit", outline:"none" },
   clearBtn: { background:"rgba(229,62,62,0.08)", border:"1.5px solid rgba(229,62,62,0.25)", borderRadius:10, padding:"10px 16px", color:"#c0392b", fontSize:13, cursor:"pointer", fontFamily:"inherit", fontWeight:600, whiteSpace:"nowrap" },
   list: { display:"flex", flexDirection:"column", gap:14 },
-  empty: { textAlign:"center", padding:"60px 20px", background:"rgba(255,252,245,0.7)", borderRadius:16, border:"2px dashed rgba(168,130,90,0.2)" },
-  card: { background:"rgba(255,252,245,0.92)", borderRadius:14, padding:"18px 20px", display:"flex", gap:16, boxShadow:"0 2px 16px rgba(100,70,40,0.09)", border:"1px solid rgba(168,130,90,0.12)" },
-  cardHoy: { border:"2px solid #c8873a", boxShadow:"0 2px 20px rgba(200,135,58,0.18)" },
-  cardDateBox: { background:"linear-gradient(135deg,#3d2b1f,#6b4226)", borderRadius:10, padding:"10px 12px", textAlign:"center", minWidth:85 },
-  cardDateBoxHoy: { background:"linear-gradient(135deg,#a0622a,#c8873a)" },
+  empty: { textAlign:"center", padding:"60px 20px", background:"rgba(255,255,255,0.6)", borderRadius:16, border:"2px dashed rgba(212,175,55,0.3)" },
+  card: { background:"rgba(255,255,255,0.95)", borderRadius:14, padding:"18px 20px", display:"flex", gap:16, boxShadow:"0 2px 16px rgba(44,62,50,0.06)", border:"1px solid rgba(212,175,55,0.15)" },
+  cardHoy: { border:"2px solid #d4af37", boxShadow:"0 2px 20px rgba(212,175,55,0.15)" },
+  cardDateBox: { background:"linear-gradient(135deg, #2c3e32, #1a251d)", borderRadius:10, padding:"10px 12px", textAlign:"center", minWidth:85 },
+  cardDateBoxHoy: { background:"linear-gradient(135deg, #d4af37, #b5952f)" },
   hoyTag: { background:"rgba(255,255,255,0.2)", color:"#fff", fontSize:9, fontWeight:800, letterSpacing:"0.15em", borderRadius:4, padding:"2px 6px", display:"inline-block" },
-  cardDateDay: { color:"#f0d9b5", fontSize:11, letterSpacing:"0.08em", textTransform:"uppercase" },
+  cardDateDay: { color:"#fff", fontSize:11, letterSpacing:"0.08em", textTransform:"uppercase" },
   cardDateTime: { color:"#fff", fontSize:20, fontWeight:700 },
   cardBody: { flex:1 },
   cardTop: { display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, flexWrap:"wrap", gap:10 },
-  cardName: { fontSize:17, fontWeight:700, color:"#2a1a0e" },
-  cardService: { fontSize:13, color:"#8a6a44", marginTop:2, fontStyle:"italic" },
+  cardName: { fontSize:17, fontWeight:700, color:"#1a251d" },
+  cardService: { fontSize:13, color:"#5a6e5a", marginTop:2, fontStyle:"italic" },
   statusBadge: { display:"inline-flex", alignItems:"center", gap:5, borderRadius:20, padding:"4px 12px", fontSize:12, fontWeight:600 },
   statusDot: { width:7, height:7, borderRadius:"50%", display:"inline-block" },
   chips: { display:"flex", flexWrap:"wrap", gap:8 },
-  chip: { background:"#f0e8db", borderRadius:20, padding:"4px 10px", fontSize:12, color:"#6b4a2a", display:"inline-flex", alignItems:"center", gap:4 },
+  chip: { background:"#f4f7f4", border:"1px solid #e2e8e2", borderRadius:20, padding:"4px 10px", fontSize:12, color:"#2c3e32", display:"inline-flex", alignItems:"center", gap:4 },
   chipClickable: { cursor:"pointer" },
   editHint: { fontSize:11, opacity:0.6 },
-  durEditor: { display:"flex", alignItems:"center", gap:6, marginTop:10, background:"#fef8f0", borderRadius:8, padding:"8px 12px", border:"1px solid #e0c8a8", flexWrap:"wrap" },
-  durBtn: { background:"#f0e8db", border:"1.5px solid transparent", borderRadius:6, padding:"4px 10px", fontSize:12, color:"#6b4a2a", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
-  durBtnActive: { background:"#3d2b1f", color:"#f0d9b5", border:"1.5px solid #3d2b1f" },
-  durCancel: { background:"transparent", border:"none", cursor:"pointer", color:"#9a7a5a", fontSize:14, padding:"2px 6px", fontFamily:"inherit" },
+  durEditor: { display:"flex", alignItems:"center", gap:6, marginTop:10, background:"#f4f7f4", borderRadius:8, padding:"8px 12px", border:"1px solid #d4af37", flexWrap:"wrap" },
+  durBtn: { background:"#fff", border:"1.5px solid transparent", borderRadius:6, padding:"4px 10px", fontSize:12, color:"#2c3e32", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
+  durBtnActive: { background:"#2c3e32", color:"#d4af37", border:"1.5px solid #2c3e32" },
+  durCancel: { background:"transparent", border:"none", cursor:"pointer", color:"#5a6e5a", fontSize:14, padding:"2px 6px", fontFamily:"inherit" },
   actions: { display:"flex", gap:8 },
-  actionBtn: { background:"#f0e8db", border:"none", borderRadius:8, padding:"8px 12px", fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontWeight:600, color:"#3d2b1f" },
+  actionBtn: { background:"#f4f7f4", border:"1px solid #e2e8e2", borderRadius:8, padding:"8px 12px", fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontWeight:600, color:"#1a251d" },
 };
 
 export default function TurnosList({ appointments, loading, rol, search, setSearch, filterHoy, setFilterHoy, onEdit, onDelete, onUpdateDuration, onClearAll, user }) {
+  // ... [MANTENER EL RESTO DE LA LÓGICA DEL COMPONENTE EXACTAMENTE IGUAL HASTA EL RETURN] ...
   const [isMobile, setIsMobile] = useState(window.innerWidth < 650);
   const [editingDur, setEditingDur] = useState(null);
 
@@ -90,7 +91,7 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
             sub: `${cupoLibre} lugar${cupoLibre !== 1 ? "es" : ""} libre${cupoLibre !== 1 ? "s" : ""}`,
             subColor: cupoLibre === 0 ? "#e53e3e" : cupoLibre <= 2 ? "#f0a500" : "#27ae60", clickable: true },
         ].map(st => (
-          <div key={st.label} style={{ ...s.statCard, cursor: st.clickable ? "pointer" : "default", outline: st.clickable && filterHoy ? "2px solid #c8873a" : "none" }}
+          <div key={st.label} style={{ ...s.statCard, cursor: st.clickable ? "pointer" : "default", outline: st.clickable && filterHoy ? "2px solid #d4af37" : "none" }}
             onClick={() => st.clickable && setFilterHoy(f => !f)}>
             <div style={s.statIcon}>{st.icon}</div>
             <div style={s.statValue}>{st.value}</div>
@@ -114,9 +115,9 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
       </div>
 
       <div style={s.list}>
-        {loading && <div style={s.empty}><div style={{ fontSize: 36, marginBottom: 10 }}>⏳</div><div style={{ color: "#7a6e5f" }}>Cargando turnos...</div></div>}
+        {loading && <div style={s.empty}><div style={{ fontSize: 36, marginBottom: 10 }}>⏳</div><div style={{ color: "#5a6e5a" }}>Cargando turnos...</div></div>}
         {!loading && filtered.length === 0 && (
-          <div style={s.empty}><div style={{ fontSize: 48, marginBottom: 12 }}>🌿</div><div style={{ fontFamily: "Georgia,serif", fontSize: 18, color: "#7a6e5f" }}>{filterHoy ? "No hay turnos para hoy" : "No hay turnos registrados"}</div></div>
+          <div style={s.empty}><div style={{ fontSize: 48, marginBottom: 12 }}>🌿</div><div style={{ fontFamily: "Georgia,serif", fontSize: 18, color: "#5a6e5a" }}>{filterHoy ? "No hay turnos para hoy" : "No hay turnos registrados"}</div></div>
         )}
         
         {!loading && filtered.map(appt => {
@@ -166,7 +167,7 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
                 </div>
                 {editingDur === appt.id && (
                   <div style={s.durEditor}>
-                    <span style={{ fontSize: 13, color: "#7a6e5f", marginRight: 8 }}>Cambiar duración:</span>
+                    <span style={{ fontSize: 13, color: "#5a6e5a", marginRight: 8 }}>Cambiar duración:</span>
                     {DURATIONS.map(d => (
                       <button key={d} type="button" style={{ ...s.durBtn, ...(appt.duration === d ? s.durBtnActive : {}) }} onClick={() => handleDurChange(appt.id, d)}>{d}m</button>
                     ))}
@@ -179,7 +180,7 @@ export default function TurnosList({ appointments, loading, rol, search, setSear
                 ...s.actions, 
                 flexDirection: isMobile ? "row" : "column",
                 marginTop: isMobile ? 8 : 0,
-                borderTop: isMobile ? "1px solid rgba(168,130,90,0.15)" : "none",
+                borderTop: isMobile ? "1px solid rgba(212,175,55,0.15)" : "none",
                 paddingTop: isMobile ? 16 : 0
               }}>
                 <button 
