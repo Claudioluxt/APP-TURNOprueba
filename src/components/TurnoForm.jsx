@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "../lib/supabase";
 
 const s = {
@@ -16,7 +16,6 @@ const s = {
 };
 
 export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
-  // Inicializamos el estado con los datos del usuario si existen, pero permitiendo su edición
   const [formData, setFormData] = useState({
     nombre: user?.user_metadata?.full_name || "",
     correo: user?.email || "",
@@ -29,11 +28,9 @@ export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
   const [errores, setErrores] = useState({});
   const [loading, setLoading] = useState(false);
 
-  // Manejador genérico para actualizar el estado mientras el usuario escribe
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    // Limpia el error del campo específico al empezar a escribir
     if (errores[name]) {
       setErrores((prev) => ({ ...prev, [name]: null }));
     }
@@ -42,7 +39,7 @@ export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validación de campos requeridos
+    // Validación de campos vacíos
     let nuevosErrores = {};
     if (!formData.nombre.trim()) nuevosErrores.nombre = "Nombre requerido";
     if (!formData.correo.trim()) nuevosErrores.correo = "Correo requerido";
@@ -58,21 +55,38 @@ export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
 
     setLoading(true);
     try {
-      // Inserción en la base de datos Supabase
+      const fechaHoraDb = `${formData.fecha} ${formData.hora}:00`;
+
+      // Validación de sobreposición
+      const { data: turnosExistentes, error: checkError } = await supabase
+        .from("turnos")
+        .select("id")
+        .eq("date", fechaHoraDb)
+        .neq("status", "cancelado"); 
+
+      if (checkError) throw checkError;
+
+      if (turnosExistentes && turnosExistentes.length > 0) {
+        setErrores({ hora: "Este horario ya se encuentra reservado." });
+        setLoading(false);
+        return; 
+      }
+
+      // Inserción en la base de datos (sin enviar user_id)
       const { error: dbError } = await supabase
         .from("turnos")
         .insert([{ 
           name: formData.nombre,
           email: formData.correo,
           phone: formData.telefono,
-          service: formData.servicio,
-          date: `${formData.fecha} ${formData.hora}:00`,
+          service: formData.servicio, // Se guarda el nombre del servicio seleccionado
+          date: fechaHoraDb,
           status: "pendiente"
         }]);
 
       if (dbError) throw dbError;
       
-      // Si se guardó correctamente, llamamos a la función para volver al panel
+      alert("¡Turno reservado con éxito!");
       if (onGuardado) onGuardado();
       
     } catch (err) {
@@ -92,74 +106,53 @@ export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
 
       <form onSubmit={handleSubmit} style={s.form}>
         
-        {/* CAMPO NOMBRE DESBLOQUEADO */}
         <div style={s.field}>
           <label style={s.label}>NOMBRE *</label>
           <input 
-            type="text" 
-            name="nombre"
-            value={formData.nombre} 
-            onChange={handleChange} 
-            placeholder="Ej: María González"
-            style={{ ...s.input, ...(errores.nombre ? s.inputError : {}) }}
+            type="text" name="nombre" value={formData.nombre} onChange={handleChange} 
+            placeholder="Ej: María González" style={{ ...s.input, ...(errores.nombre ? s.inputError : {}) }}
           />
           {errores.nombre && <span style={s.errorText}>{errores.nombre}</span>}
         </div>
 
-        {/* CAMPO CORREO DESBLOQUEADO */}
         <div style={s.field}>
           <label style={s.label}>CORREO *</label>
           <input 
-            type="email" 
-            name="correo"
-            value={formData.correo} 
-            onChange={handleChange} 
-            placeholder="Ej: correo@ejemplo.com"
-            style={{ ...s.input, ...(errores.correo ? s.inputError : {}) }}
+            type="email" name="correo" value={formData.correo} onChange={handleChange} 
+            placeholder="Ej: correo@ejemplo.com" style={{ ...s.input, ...(errores.correo ? s.inputError : {}) }}
           />
           {errores.correo && <span style={s.errorText}>{errores.correo}</span>}
         </div>
 
-        {/* CAMPO TELÉFONO DESBLOQUEADO */}
         <div style={s.field}>
           <label style={s.label}>TELÉFONO *</label>
           <input 
-            type="tel" 
-            name="telefono"
-            value={formData.telefono} 
-            onChange={handleChange} 
-            placeholder="Ej: 3482536380"
-            style={{ ...s.input, ...(errores.telefono ? s.inputError : {}) }}
+            type="tel" name="telefono" value={formData.telefono} onChange={handleChange} 
+            placeholder="Ej: 3482536380" style={{ ...s.input, ...(errores.telefono ? s.inputError : {}) }}
           />
           {errores.telefono && <span style={s.errorText}>{errores.telefono}</span>}
         </div>
 
-        {/* CAMPO SERVICIO */}
         <div style={s.field}>
           <label style={s.label}>SERVICIO *</label>
           <select 
-            name="servicio" 
-            value={formData.servicio} 
-            onChange={handleChange}
+            name="servicio" value={formData.servicio} onChange={handleChange}
             style={{ ...s.input, ...(errores.servicio ? s.inputError : {}) }}
           >
             <option value="">Seleccionar servicio...</option>
-            <option value="Masaje Relajante">Masaje Relajante</option>
-            <option value="Masaje Descontracturante">Masaje Descontracturante</option>
-            <option value="Piedras Calientes">Piedras Calientes</option>
+            {/* EDITÁ LOS PRECIOS EN ESTAS LÍNEAS SEGÚN TUS VALORES REALES */}
+            <option value="Masaje Relajante">Masaje Relajante - $15.000</option>
+            <option value="Masaje Descontracturante">Masaje Descontracturante - $18.000</option>
+            <option value="Piedras Calientes">Piedras Calientes - $20.000</option>
           </select>
           {errores.servicio && <span style={s.errorText}>{errores.servicio}</span>}
         </div>
 
-        {/* CAMPOS FECHA Y HORA (Agrupados) */}
         <div style={{ display: "flex", gap: 12 }}>
           <div style={{ ...s.field, flex: 1 }}>
             <label style={s.label}>FECHA *</label>
             <input 
-              type="date" 
-              name="fecha"
-              value={formData.fecha} 
-              onChange={handleChange} 
+              type="date" name="fecha" value={formData.fecha} onChange={handleChange} 
               style={{ ...s.input, ...(errores.fecha ? s.inputError : {}) }}
             />
             {errores.fecha && <span style={s.errorText}>{errores.fecha}</span>}
@@ -168,10 +161,7 @@ export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
           <div style={{ ...s.field, flex: 1 }}>
             <label style={s.label}>HORA *</label>
             <input 
-              type="time" 
-              name="hora"
-              value={formData.hora} 
-              onChange={handleChange} 
+              type="time" name="hora" value={formData.hora} onChange={handleChange} 
               style={{ ...s.input, ...(errores.hora ? s.inputError : {}) }}
             />
             {errores.hora && <span style={s.errorText}>{errores.hora}</span>}
