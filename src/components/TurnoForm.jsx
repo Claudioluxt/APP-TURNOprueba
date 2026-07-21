@@ -1,191 +1,188 @@
 import { useState, useEffect } from "react";
-import { SERVICES, SERVICE_INFO, DURATIONS, DIAS_LABORABLES, formatPrecio } from "../hooks/useTurnos";
+import { supabase } from "../lib/supabase";
 
 const s = {
-  wrap: { maxWidth:680, margin:"0 auto", padding: "0 10px" },
-  card: { background:"rgba(255,252,245,0.96)", borderRadius:18, boxShadow:"0 8px 40px rgba(100,70,40,0.13)", border:"1px solid rgba(168,130,90,0.15)" },
-  header: { display:"flex", alignItems:"center", gap:16, marginBottom:20, flexWrap: "wrap" },
-  backBtn: { background:"transparent", border:"none", color:"#8a6a44", cursor:"pointer", fontSize:14, fontFamily:"inherit", padding:"6px 10px", borderRadius:6 },
-  title: { margin:0, fontSize:22, color:"#2a1a0e", fontWeight:700 },
-  bizError: { background:"#fde8e8", border:"1.5px solid #e53e3e", borderRadius:10, padding:"12px 16px", fontSize:14, color:"#7a1a1a", marginBottom:20, lineHeight:1.5 },
-  grid: { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:18 },
-  field: { display:"flex", flexDirection:"column", gap:6 },
-  label: { fontSize:12, color:"#7a5a3a", fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase" },
-  input: { background:"#fef8f0", border:"1.5px solid #e0c8a8", borderRadius:9, padding:"11px 14px", fontSize:15, color:"#2a1a0e", fontFamily:"inherit", outline:"none", width: "100%", boxSizing: "border-box" },
-  inputDisabled: { background: "#ebdcc8", color: "#6b5a44", cursor: "not-allowed" },
-  inputError: { borderColor:"#e53e3e" },
-  errorMsg: { fontSize:11, color:"#e53e3e" },
-  warnMsg: { fontSize:11, color:"#e07a00" },
-  durationPicker: { display:"flex", gap:8, flexWrap:"wrap" },
-  durBtn: { background:"#f0e8db", border:"2px solid transparent", borderRadius:8, padding:"9px 18px", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:600, color:"#6b4a2a", flex: "1 1 auto", textAlign: "center" },
-  durBtnActive: { background:"#3d2b1f", color:"#f0d9b5", border:"2px solid #3d2b1f" },
-  statusRow: { display:"flex", gap:10, flexWrap: "wrap" },
-  statusBtn: { display:"inline-flex", alignItems:"center", gap:6, border:"2px solid transparent", borderRadius:20, padding:"8px 16px", fontSize:13, cursor:"pointer", fontFamily:"inherit", fontWeight:600, flex: "1 1 auto", justifyContent: "center" },
-  statusDot: { width:7, height:7, borderRadius:"50%", display:"inline-block" },
-  footer: { display:"flex", justifyContent:"flex-end", gap:12, marginTop:28, paddingTop:20, borderTop:"1px solid #ecdcc8", flexWrap: "wrap" },
-  cancelBtn: { background:"transparent", border:"1.5px solid #d0b890", borderRadius:9, padding:"11px 22px", color:"#8a6a44", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:600, flex: "1 1 auto" },
-  submitBtn: { background:"linear-gradient(135deg,#3d2b1f,#6b4226)", border:"none", borderRadius:9, padding:"11px 28px", color:"#f0d9b5", fontSize:14, cursor:"pointer", fontFamily:"inherit", fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 3px 12px rgba(61,43,31,0.3)", flex: "2 1 auto" },
-  priceHint: { fontSize:12, color:"#8a6a44", fontStyle:"italic", marginTop:2 },
+  container: { background: "#fdfbf6", padding: "24px", borderRadius: "12px", color: "#2c3e32", maxWidth: "500px", margin: "0 auto", boxShadow: "0 4px 15px rgba(0,0,0,0.05)" },
+  header: { display: "flex", alignItems: "center", gap: 16, marginBottom: 24 },
+  backBtn: { background: "transparent", border: "none", color: "#5a4a35", cursor: "pointer", fontSize: 14, fontWeight: 600 },
+  title: { fontSize: 20, fontWeight: 700, margin: 0, color: "#1a251d" },
+  form: { display: "flex", flexDirection: "column", gap: 18 },
+  field: { display: "flex", flexDirection: "column", gap: 6 },
+  label: { fontSize: 12, fontWeight: 700, color: "#5a4a35", textTransform: "uppercase", letterSpacing: "0.05em" },
+  input: { padding: "12px", borderRadius: "8px", border: "1px solid rgba(212,175,55,0.4)", background: "rgba(212,175,55,0.05)", color: "#1a251d", fontSize: 14, outline: "none", fontFamily: "inherit" },
+  inputError: { border: "1px solid #e74c3c", background: "rgba(231,76,60,0.1)" },
+  errorText: { color: "#e74c3c", fontSize: 11, marginTop: 4, textAlign: "center" },
+  submitBtn: { background: "#d4af37", color: "#1a251d", border: "none", padding: "14px", borderRadius: "8px", fontWeight: 700, cursor: "pointer", marginTop: 10, fontSize: 15, textTransform: "uppercase", boxShadow: "0 4px 10px rgba(212,175,55,0.3)" }
 };
 
-const statusColors = {
-  confirmado: { bg:"#d4f4e7", text:"#1a7a4a", dot:"#27ae60" },
-  pendiente:  { bg:"#fef5dc", text:"#7a5a0a", dot:"#f0a500" },
-  cancelado:  { bg:"#fde8e8", text:"#7a1a1a", dot:"#e53e3e" },
-};
+export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
+  // Inicializamos el estado con los datos del usuario si existen, pero permitiendo su edición
+  const [formData, setFormData] = useState({
+    nombre: user?.user_metadata?.full_name || "",
+    correo: user?.email || "",
+    telefono: "",
+    servicio: "",
+    fecha: "",
+    hora: ""
+  });
 
-const emptyForm = { name:"", email:"", phone:"", service:SERVICES[0], duration:SERVICE_INFO[SERVICES[0]].duracion, date:"", time:"", status:"confirmado" };
+  const [errores, setErrores] = useState({});
+  const [loading, setLoading] = useState(false);
 
-export default function TurnoForm({ selected, onBack, onSave, prefillDate, user, rol }) {
-  const [form, setForm] = useState(emptyForm);
-  const [errors, setErrors] = useState({});
-  const [saving, setSaving] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 650);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 650);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  useEffect(() => {
-    if (selected) {
-      const d = selected.date;
-      const pad = n => String(n).padStart(2,"0");
-      setForm({
-        name: selected.name, email: selected.email, phone: selected.phone,
-        service: selected.service, duration: selected.duration, status: selected.status,
-        date: `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`,
-        time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-      });
-    } else {
-      setForm({
-        ...emptyForm,
-        name: rol === "cliente" ? (user?.user_metadata?.full_name || "") : "",
-        email: rol === "cliente" ? (user?.email || "") : "",
-        status: rol === "cliente" ? "pendiente" : "confirmado",
-        date: prefillDate || "",
-      });
+  // Manejador genérico para actualizar el estado mientras el usuario escribe
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    // Limpia el error del campo específico al empezar a escribir
+    if (errores[name]) {
+      setErrores((prev) => ({ ...prev, [name]: null }));
     }
-    setErrors({});
-  }, [selected, prefillDate, user, rol]);
-
-  const validate = () => {
-    const e = {};
-    if (!form.name.trim()) e.name = "Nombre requerido";
-    if (!form.email.includes("@")) e.email = "Email inválido";
-    if (form.phone.length < 8) e.phone = "Teléfono inválido";
-    if (!form.date) e.date = "Fecha requerida";
-    if (!form.time) e.time = "Hora requerida";
-    setErrors(e);
-    return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = async () => {
-    if (!validate()) return;
-    setSaving(true);
-    const result = await onSave(form, selected?.id);
-    setSaving(false);
-    if (result?.error) setErrors(e => ({ ...e, business: result.error }));
-  };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Validación de campos requeridos
+    let nuevosErrores = {};
+    if (!formData.nombre.trim()) nuevosErrores.nombre = "Nombre requerido";
+    if (!formData.correo.trim()) nuevosErrores.correo = "Correo requerido";
+    if (!formData.telefono.trim()) nuevosErrores.telefono = "Teléfono requerido";
+    if (!formData.servicio) nuevosErrores.servicio = "Servicio requerido";
+    if (!formData.fecha) nuevosErrores.fecha = "Fecha requerida";
+    if (!formData.hora) nuevosErrores.hora = "Hora requerida";
 
-  const esFinDeSemana = form.date && !DIAS_LABORABLES.includes(new Date(form.date+"T12:00").getDay());
+    if (Object.keys(nuevosErrores).length > 0) {
+      setErrores(nuevosErrores);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Inserción en la base de datos Supabase
+      const { error: dbError } = await supabase
+        .from("turnos")
+        .insert([{ 
+          user_id: user?.id || null,
+          name: formData.nombre,
+          email: formData.correo,
+          phone: formData.telefono,
+          service: formData.servicio,
+          date: `${formData.fecha} ${formData.hora}:00`,
+          status: "pendiente"
+        }]);
+
+      if (dbError) throw dbError;
+      
+      // Si se guardó correctamente, llamamos a la función para volver al panel
+      if (onGuardado) onGuardado();
+      
+    } catch (err) {
+      console.error("Error guardando turno:", err);
+      alert("Hubo un error al registrar el turno. Intentá de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div style={s.wrap}>
-      <div style={{ ...s.card, padding: isMobile ? "20px 16px" : "30px 32px" }}>
-        <div style={s.header}>
-          <button type="button" style={s.backBtn} onClick={onBack}>← Volver</button>
-          <h2 style={s.title}>{selected ? "Editar Turno" : "Nuevo Turno"}</h2>
-        </div>
-
-        {errors.business && <div style={s.bizError}>⚠️ {errors.business}</div>}
-
-        <div style={s.grid}>
-          <div style={s.field}>
-            <label htmlFor="name" style={s.label}>Nombre *</label>
-            <input id="name" name="name" style={{...s.input,...(errors.name?s.inputError:{}), ...(rol === "cliente"?s.inputDisabled:{})}} 
-              placeholder="Ej: María González" value={form.name} disabled={rol === "cliente"}
-              onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
-            {errors.name && <span style={s.errorMsg}>{errors.name}</span>}
-          </div>
-
-          <div style={s.field}>
-            <label htmlFor="email" style={s.label}>Correo *</label>
-            <input id="email" name="email" type="email" style={{...s.input,...(errors.email?s.inputError:{}), ...(rol === "cliente"?s.inputDisabled:{})}} 
-              placeholder="cliente@email.com" value={form.email} disabled={rol === "cliente"}
-              onChange={e=>setForm(f=>({...f,email:e.target.value}))}/>
-            {errors.email && <span style={s.errorMsg}>{errors.email}</span>}
-          </div>
-
-          <div style={s.field}>
-            <label htmlFor="phone" style={s.label}>Teléfono *</label>
-            <input id="phone" name="phone" type="tel" style={{...s.input,...(errors.phone?s.inputError:{})}} placeholder="+54 11 1234-5678"
-              value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))}/>
-            {errors.phone && <span style={s.errorMsg}>{errors.phone}</span>}
-          </div>
-
-          <div style={s.field}>
-            <label htmlFor="service" style={s.label}>Servicio</label>
-            <select id="service" name="service" style={s.input} value={form.service} onChange={e=>{
-              const svc = e.target.value;
-              setForm(f=>({...f, service:svc, duration: SERVICE_INFO[svc]?.duracion || f.duration}));
-            }}>
-              {SERVICES.map(sv=><option key={sv} value={sv}>{sv} — {formatPrecio(SERVICE_INFO[sv].precio)}</option>)}
-            </select>
-            <span style={s.priceHint}>⏱ Duración sugerida: {SERVICE_INFO[form.service]?.duracion} min</span>
-          </div>
-
-          <div style={s.field}>
-            <label htmlFor="date" style={s.label}>Fecha *</label>
-            <input id="date" name="date" type="date" style={{...s.input,...(errors.date?s.inputError:{})}}
-              value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
-            {errors.date && <span style={s.errorMsg}>{errors.date}</span>}
-            {esFinDeSemana && <span style={s.warnMsg}>⚠️ Fin de semana — no se trabaja</span>}
-          </div>
-
-          <div style={s.field}>
-            <label htmlFor="time" style={s.label}>Hora *</label>
-            <input id="time" name="time" type="time" style={{...s.input,...(errors.time?s.inputError:{})}}
-              value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))}/>
-            {errors.time && <span style={s.errorMsg}>{errors.time}</span>}
-          </div>
-
-          <div style={{...s.field, gridColumn:"1 / -1"}}>
-            <label style={s.label}>Duración del Turno</label>
-            <div style={s.durationPicker}>
-              {DURATIONS.map(d=>(
-                <button key={d} type="button" style={{...s.durBtn,...(form.duration===d?s.durBtnActive:{})}}
-                  disabled={rol === "cliente"} onClick={()=>setForm(f=>({...f,duration:d}))}>{d} min</button>
-              ))}
-            </div>
-          </div>
-
-          {rol !== "cliente" && (
-            <div style={{...s.field, gridColumn:"1 / -1"}}>
-              <label style={s.label}>Estado</label>
-              <div style={s.statusRow}>
-                {["confirmado","pendiente","cancelado"].map(st=>{
-                  const sc = statusColors[st];
-                  return (
-                    <button key={st} type="button" style={{...s.statusBtn, background:form.status===st?sc.bg:"#f5f0eb", color:form.status===st?sc.text:"#9a8e7f", borderColor:form.status===st?sc.dot:"transparent"}}
-                      onClick={()=>setForm(f=>({...f,status:st}))}>
-                      <span style={{...s.statusDot, background:sc.dot}}/>{st}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div style={s.footer}>
-          <button type="button" style={s.cancelBtn} onClick={onBack}>Cancelar</button>
-          <button type="button" style={s.submitBtn} onClick={handleSubmit} disabled={saving}>
-            {saving ? "Guardando..." : selected ? "Guardar Cambios" : "Solicitar Reserva"}
-          </button>
-        </div>
+    <div style={s.container}>
+      <div style={s.header}>
+        <button style={s.backBtn} onClick={onVolver}>← Volver</button>
+        <h2 style={s.title}>Nuevo Turno</h2>
       </div>
+
+      <form onSubmit={handleSubmit} style={s.form}>
+        
+        {/* CAMPO NOMBRE DESBLOQUEADO */}
+        <div style={s.field}>
+          <label style={s.label}>NOMBRE *</label>
+          <input 
+            type="text" 
+            name="nombre"
+            value={formData.nombre} 
+            onChange={handleChange} 
+            placeholder="Ej: María González"
+            style={{ ...s.input, ...(errores.nombre ? s.inputError : {}) }}
+          />
+          {errores.nombre && <span style={s.errorText}>{errores.nombre}</span>}
+        </div>
+
+        {/* CAMPO CORREO DESBLOQUEADO */}
+        <div style={s.field}>
+          <label style={s.label}>CORREO *</label>
+          <input 
+            type="email" 
+            name="correo"
+            value={formData.correo} 
+            onChange={handleChange} 
+            placeholder="Ej: correo@ejemplo.com"
+            style={{ ...s.input, ...(errores.correo ? s.inputError : {}) }}
+          />
+          {errores.correo && <span style={s.errorText}>{errores.correo}</span>}
+        </div>
+
+        {/* CAMPO TELÉFONO DESBLOQUEADO */}
+        <div style={s.field}>
+          <label style={s.label}>TELÉFONO *</label>
+          <input 
+            type="tel" 
+            name="telefono"
+            value={formData.telefono} 
+            onChange={handleChange} 
+            placeholder="Ej: 3482536380"
+            style={{ ...s.input, ...(errores.telefono ? s.inputError : {}) }}
+          />
+          {errores.telefono && <span style={s.errorText}>{errores.telefono}</span>}
+        </div>
+
+        {/* CAMPO SERVICIO */}
+        <div style={s.field}>
+          <label style={s.label}>SERVICIO *</label>
+          <select 
+            name="servicio" 
+            value={formData.servicio} 
+            onChange={handleChange}
+            style={{ ...s.input, ...(errores.servicio ? s.inputError : {}) }}
+          >
+            <option value="">Seleccionar servicio...</option>
+            <option value="Masaje Relajante">Masaje Relajante</option>
+            <option value="Masaje Descontracturante">Masaje Descontracturante</option>
+            <option value="Piedras Calientes">Piedras Calientes</option>
+          </select>
+          {errores.servicio && <span style={s.errorText}>{errores.servicio}</span>}
+        </div>
+
+        {/* CAMPOS FECHA Y HORA (Agrupados) */}
+        <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ ...s.field, flex: 1 }}>
+            <label style={s.label}>FECHA *</label>
+            <input 
+              type="date" 
+              name="fecha"
+              value={formData.fecha} 
+              onChange={handleChange} 
+              style={{ ...s.input, ...(errores.fecha ? s.inputError : {}) }}
+            />
+            {errores.fecha && <span style={s.errorText}>{errores.fecha}</span>}
+          </div>
+
+          <div style={{ ...s.field, flex: 1 }}>
+            <label style={s.label}>HORA *</label>
+            <input 
+              type="time" 
+              name="hora"
+              value={formData.hora} 
+              onChange={handleChange} 
+              style={{ ...s.input, ...(errores.hora ? s.inputError : {}) }}
+            />
+            {errores.hora && <span style={s.errorText}>{errores.hora}</span>}
+          </div>
+        </div>
+
+        <button type="submit" style={s.submitBtn} disabled={loading}>
+          {loading ? "PROCESANDO..." : (rol === "admin" ? "GUARDAR TURNO" : "RESERVAR TURNO")}
+        </button>
+      </form>
     </div>
   );
 }
