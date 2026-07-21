@@ -5,8 +5,6 @@ import logoImg from "../assets/logo.png";
 const s = {
   wrapper: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #2c3e32 0%, #1a251d 100%)", padding: 20 },
   card: { width: "100%", maxWidth: 380, display: "flex", flexDirection: "column", alignItems: "center" },
-  
-  // Logo con efecto 3D y borde difuminado
   logoImg: { 
     width: 150, 
     height: 150, 
@@ -16,7 +14,6 @@ const s = {
     background: "#1a251d", 
     boxShadow: "0 0 20px 4px rgba(212, 175, 55, 0.4), 0 20px 40px rgba(0, 0, 0, 0.7), 0 15px 20px rgba(0, 0, 0, 0.5)" 
   },
-  
   title: { color: "#d4af37", fontSize: 24, fontWeight: 400, letterSpacing: "0.15em", fontFamily: "'Palatino Linotype', Georgia, serif", textTransform: "uppercase", marginBottom: 35 },
   form: { width: "100%", display: "flex", flexDirection: "column", gap: 24 },
   field: { display: "flex", flexDirection: "column", gap: 6 },
@@ -72,7 +69,14 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     setLoading(true);
-    await supabase.auth.signInWithOAuth({ provider: "google" });
+    await supabase.auth.signInWithOAuth({ 
+      provider: "google",
+      options: {
+        queryParams: {
+          prompt: 'select_account',
+        }
+      }
+    });
   };
 
   return (
@@ -86,16 +90,16 @@ export default function Login() {
           {view === "forgot" && "Recuperar Clave"}
         </h1>
 
-        <form onSubmit={handleSubmit} style={s.form}>
+        <form onSubmit={handleSubmit} style={s.form} autoComplete="off">
           <div style={s.field}>
             <label style={s.label}>✉️ Correo Electrónico</label>
-            <input type="email" required style={s.input} value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input type="email" required style={s.input} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
           </div>
 
           {view !== "forgot" && (
             <div style={s.field}>
               <label style={s.label}>🔒 Contraseña</label>
-              <input type="password" required minLength={6} style={s.input} value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input type="password" required minLength={6} style={s.input} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
             </div>
           )}
 

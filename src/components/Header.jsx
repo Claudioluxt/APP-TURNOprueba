@@ -1,13 +1,11 @@
 import { useState, useEffect } from "react";
 import { supabase, getRol } from "../lib/supabase";
 
-// 1. Importamos los íconos y la nueva imagen de fondo
 import wpIcon from "../assets/whatsapp.png";
 import igIcon from "../assets/instagram.png";
 import headerBg from "../assets/login.jpg";
 
 const s = {
-  // 2. Aplicamos la imagen como fondo (cover y centrada)
   header: { 
     backgroundImage: `url(${headerBg})`, 
     backgroundSize: "cover", 
@@ -16,8 +14,6 @@ const s = {
     position: "relative", 
     zIndex: 10 
   },
-  
-  // Agregamos un pequeño overlay oscuro interno para que los textos dorados sigan siendo legibles sobre la imagen
   inner: { maxWidth:900, margin:"0 auto", padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", background: "rgba(26,37,29,0.3)", borderRadius: 12, backdropFilter: "blur(2px)" },
   
   logoImg: { width: 50, height: 50, borderRadius: "50%", border: "2px solid #d4af37", objectFit: "cover", background: "#1a251d", flexShrink: 0 },
@@ -26,6 +22,7 @@ const s = {
 
   rolBadge: { borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700, letterSpacing:"0.06em", display: "inline-block", marginTop: 4 },
   userName: { color:"#d4af37", fontSize:13, fontWeight:600 },
+  userEmail: { color: "#a8b5a8", fontSize: 11, marginTop: 2, marginBottom: 4 },
   avatar: { width:36, height:36, borderRadius:"50%", border:"2px solid #d4af37", objectFit:"cover", flexShrink: 0 },
   avatarFallback: { width:36, height:36, borderRadius:"50%", border:"2px solid #d4af37", background:"#d4af37", display:"flex", alignItems:"center", justifyContent:"center", color:"#1a251d", fontWeight:700, fontSize:14, flexShrink: 0 },
   
@@ -66,7 +63,6 @@ export default function Header({ user, onNuevoTurno }) {
 
   return (
     <header style={s.header}>
-      {/* Envolvimos el contenido en inner para darle un fondo semitransparente (overlay) y que no se pierda contra la imagen */}
       <div style={{ padding: "10px" }}>
         <div style={{ ...s.inner, flexDirection: isMobile ? "column" : "row", gap: isMobile ? 18 : 0 }}>
           
@@ -94,6 +90,7 @@ export default function Header({ user, onNuevoTurno }) {
             <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: isMobile ? "center" : "flex-end" }}>
               <div style={{ textAlign: "right" }}>
                 <div style={s.userName}>{nombre}</div>
+                <div style={s.userEmail}>{user?.email}</div>
                 <div style={{ ...s.rolBadge, background: badgeBg, color: badgeColor }}>{rolText}</div>
               </div>
               {avatar ? <img src={avatar} alt={nombre} style={s.avatar} /> : <div style={s.avatarFallback}>{nombre[0].toUpperCase()}</div>}

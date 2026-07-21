@@ -12,11 +12,11 @@ export const isConfigured =
 /// ─── CONFIGURACIÓN DE TRES ROLES ────────────────
 export const ADMIN_EMAILS = [
   "luxengabriel@gmail.com",
-  "Jimenaleguizamon91@gmail.com",
+  "jimenaleguizamon91@gmail.com",
 ];
 
 export const RECEPCIONISTA_EMAILS = [
-  "Jimenakkj@gmail.com", 
+  "Jimen@gmail.com", 
 ];
 
 export const getRol = (email) => {
