@@ -62,7 +62,6 @@ export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
       const { error: dbError } = await supabase
         .from("turnos")
         .insert([{ 
-          user_id: user?.id || null,
           name: formData.nombre,
           email: formData.correo,
           phone: formData.telefono,
