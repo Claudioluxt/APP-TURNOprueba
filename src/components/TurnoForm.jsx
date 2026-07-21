@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "../lib/supabase";
+import { useTurnos, SERVICES, SERVICE_INFO } from "../hooks/useTurnos"; 
 
 const s = {
   container: { background: "#fdfbf6", padding: "24px", borderRadius: "12px", color: "#2c3e32", maxWidth: "500px", margin: "0 auto", boxShadow: "0 4px 15px rgba(0,0,0,0.05)" },
@@ -16,6 +16,8 @@ const s = {
 };
 
 export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
+  const { save } = useTurnos(user); 
+
   const [formData, setFormData] = useState({
     nombre: user?.user_metadata?.full_name || "",
     correo: user?.email || "",
@@ -39,7 +41,6 @@ export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validación de campos vacíos
     let nuevosErrores = {};
     if (!formData.nombre.trim()) nuevosErrores.nombre = "Nombre requerido";
     if (!formData.correo.trim()) nuevosErrores.correo = "Correo requerido";
@@ -54,37 +55,26 @@ export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
     }
 
     setLoading(true);
+    
     try {
-      const fechaHoraDb = `${formData.fecha} ${formData.hora}:00`;
+      const duracionServicio = SERVICE_INFO[formData.servicio]?.duracion || 120; 
 
-      // Validación de sobreposición
-      const { data: turnosExistentes, error: checkError } = await supabase
-        .from("turnos")
-        .select("id")
-        .eq("date", fechaHoraDb)
-        .neq("status", "cancelado"); 
+      const result = await save({
+        name: formData.nombre,
+        email: formData.correo,
+        phone: formData.telefono,
+        service: formData.servicio,
+        duration: duracionServicio,
+        status: "pendiente",
+        date: formData.fecha,
+        time: formData.hora
+      });
 
-      if (checkError) throw checkError;
-
-      if (turnosExistentes && turnosExistentes.length > 0) {
-        setErrores({ hora: "Este horario ya se encuentra reservado." });
+      if (result.error) {
+        setErrores({ hora: result.error }); 
         setLoading(false);
-        return; 
+        return;
       }
-
-      // Inserción en la base de datos (sin enviar user_id)
-      const { error: dbError } = await supabase
-        .from("turnos")
-        .insert([{ 
-          name: formData.nombre,
-          email: formData.correo,
-          phone: formData.telefono,
-          service: formData.servicio, // Se guarda el nombre del servicio seleccionado
-          date: fechaHoraDb,
-          status: "pendiente"
-        }]);
-
-      if (dbError) throw dbError;
       
       alert("¡Turno reservado con éxito!");
       if (onGuardado) onGuardado();
@@ -140,10 +130,11 @@ export default function TurnoForm({ user, rol, onVolver, onGuardado }) {
             style={{ ...s.input, ...(errores.servicio ? s.inputError : {}) }}
           >
             <option value="">Seleccionar servicio...</option>
-            {/* EDITÁ LOS PRECIOS EN ESTAS LÍNEAS SEGÚN TUS VALORES REALES */}
-            <option value="Masaje Relajante">Masaje Relajante - $15.000</option>
-            <option value="Masaje Descontracturante">Masaje Descontracturante - $18.000</option>
-            <option value="Piedras Calientes">Piedras Calientes - $20.000</option>
+            {SERVICES?.map((srv) => (
+              <option key={srv} value={srv}>
+                {srv} {SERVICE_INFO?.[srv]?.precio ? `- $${SERVICE_INFO[srv].precio.toLocaleString("es-AR")}` : ""}
+              </option>
+            ))}
           </select>
           {errores.servicio && <span style={s.errorText}>{errores.servicio}</span>}
         </div>
